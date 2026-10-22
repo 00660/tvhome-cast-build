@@ -3,7 +3,8 @@ project(airplay_jni C)
 set(OPENSSL_DIR ${CMAKE_SOURCE_DIR}/openssl/${ANDROID_ABI})
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wno-error")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wno-error -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+add_compile_options(-include ${CMAKE_SOURCE_DIR}/android_compat.h)
 
 # ---------- libplist (static) ----------
 file(GLOB PLIST_SRC
