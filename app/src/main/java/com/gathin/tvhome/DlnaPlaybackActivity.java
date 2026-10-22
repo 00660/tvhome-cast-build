@@ -32,7 +32,7 @@ public final class DlnaPlaybackActivity extends Activity implements SurfaceHolde
 
         setContentView(root);
         handleIntent(getIntent());
-        DlnaPlayer.get().setListener(this::refreshHint);
+        DlnaPlayer.get(this).setListener(this::refreshHint);
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -43,40 +43,40 @@ public final class DlnaPlaybackActivity extends Activity implements SurfaceHolde
 
     private void handleIntent(Intent intent) {
         if (intent != null && intent.hasExtra("uri")) {
-            DlnaPlayer.get().setUri(intent.getStringExtra("uri"));
+            DlnaPlayer.get(this).setUri(intent.getStringExtra("uri"));
         }
     }
 
     private void refreshHint() {
         if (hint == null) return;
-        String s = DlnaPlayer.get().getState();
+        String s = DlnaPlayer.get(this).getState();
         hint.setText(getString("PLAYING".equals(s) ? R.string.dlna_casting
                 : "TRANSITIONING".equals(s) ? R.string.dlna_loading : R.string.dlna_casting));
     }
 
     @Override public void surfaceCreated(SurfaceHolder holder) {
-        DlnaPlayer.get().setSurface(holder.getSurface());
+        DlnaPlayer.get(this).setSurface(holder.getSurface());
     }
 
     @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        DlnaPlayer.get().setSurface(holder.getSurface());
+        DlnaPlayer.get(this).setSurface(holder.getSurface());
     }
 
     @Override public void surfaceDestroyed(SurfaceHolder holder) {
-        DlnaPlayer.get().clearSurface();
+        DlnaPlayer.get(this).clearSurface();
     }
 
     @Override protected void onResume() {
         super.onResume();
         if (surfaceView != null && surfaceView.getHolder().getSurface() != null
                 && surfaceView.getHolder().getSurface().isValid()) {
-            DlnaPlayer.get().setSurface(surfaceView.getHolder().getSurface());
+            DlnaPlayer.get(this).setSurface(surfaceView.getHolder().getSurface());
         }
     }
 
     @Override public void onBackPressed() {
-        DlnaPlayer.get().stop();
-        DlnaPlayer.get().release();
+        DlnaPlayer.get(this).stop();
+        DlnaPlayer.get(this).release();
         finish();
     }
 }
