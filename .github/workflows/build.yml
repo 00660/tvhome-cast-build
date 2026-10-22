@@ -60,3 +60,11 @@ jobs:
         with:
           name: tvhome-cast-apk
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Publish APK to Release (public, for fast CDN download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "TV Home + Cast (latest)"
+          files: app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
