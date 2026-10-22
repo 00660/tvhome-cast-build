@@ -6,6 +6,7 @@ import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Surface;
+import android.util.Log;
 
 /**
  * Shared DLNA playback engine: one MediaPlayer, driven by the DLNA renderer (SOAP actions) and
@@ -117,16 +118,22 @@ final class DlnaPlayer {
         try {
             MediaPlayer mp = new MediaPlayer();
             mp.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            Log.i("DLNA", "setDataSource: " + uri);
             mp.setDataSource(uri);
             mp.setSurface(surface);
             mp.setOnPreparedListener(p -> {
                 prepared = true;
-                try { p.start(); } catch (Exception ignored) { }
+                Log.i("DLNA", "prepared: video " + p.getVideoWidth() + "x" + p.getVideoHeight()
+                        + " duration=" + p.getDuration());
+                try { p.start(); } catch (Exception e) { Log.e("DLNA","start err",e); }
                 state = PLAYING;
                 notifyChanged();
             });
-            mp.setOnCompletionListener(p -> { state = STOPPED; notifyChanged(); });
-            mp.setOnErrorListener((p, what, extra) -> { state = STOPPED; notifyChanged(); return true; });
+            mp.setOnVideoSizeChangedListener((p, w, h) -> Log.i("DLNA", "videoSize " + w + "x" + h));
+            mp.setOnInfoListener((p, what, extra) -> { Log.i("DLNA", "info what=" + what + " extra=" + extra); return false; });
+            mp.setOnBufferingUpdateListener((p, percent) -> { });
+            mp.setOnCompletionListener(p -> { Log.i("DLNA","completed"); state = STOPPED; notifyChanged(); });
+            mp.setOnErrorListener((p, what, extra) -> { Log.e("DLNA", "error what=" + what + " extra=" + extra); state = STOPPED; notifyChanged(); return true; });
             player = mp;
             prepared = false;
             state = TRANSITIONING;
