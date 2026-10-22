@@ -139,15 +139,22 @@ final class DlnaPlayer {
 
     private void syncVlcSize() {
         if (player == null || surfaceView == null) return;
-        surfaceView.post(() -> {
-            try {
-                int w = surfaceView.getWidth(), h = surfaceView.getHeight();
-                if (w > 0 && h > 0) {
+        // Retry a few times: at attach time the SurfaceView may not be laid out yet (width==0),
+        // which left libVLC rendering into a small default window.
+        for (long delay : new long[]{0, 150, 500, 1200}) {
+            surfaceView.postDelayed(() -> {
+                if (player == null || surfaceView == null) return;
+                try {
+                    int w = surfaceView.getWidth(), h = surfaceView.getHeight();
+                    if (w <= 0 || h <= 0) {
+                        android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();
+                        w = dm.widthPixels; h = dm.heightPixels;
+                    }
                     player.getVLCVout().setWindowSize(w, h);
                     Log.i("DLNA", "vlc window size " + w + "x" + h);
-                }
-            } catch (Throwable t) { Log.e("DLNA", "setWindowSize fail", t); }
-        });
+                } catch (Throwable t) { Log.e("DLNA", "setWindowSize fail", t); }
+            }, delay);
+        }
     }
 
     private void releasePlayer() {
