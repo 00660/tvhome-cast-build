@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(airplay_jni C)
+set(OPENSSL_DIR ${CMAKE_SOURCE_DIR}/openssl/${ANDROID_ABI})
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wno-error")
@@ -45,14 +46,14 @@ target_include_directories(airplay PUBLIC
     ${CMAKE_SOURCE_DIR}/uxplay-lib/playfair
     ${CMAKE_SOURCE_DIR}/uxplay-lib/llhttp
     ${CMAKE_SOURCE_DIR}/libplist/include
-    ${CMAKE_SOURCE_DIR}/libplist/src)
+    ${CMAKE_SOURCE_DIR}/libplist/src
+    ${OPENSSL_DIR}/include)
 target_compile_definitions(airplay PUBLIC
     -DNOHOLD -DSTANDALONE -DPLIST_230=1 -DOPENSSL_API_COMPAT=0x10101000L)
 target_link_libraries(airplay PUBLIC plist playfair dnssd llhttp)
 
 # ---------- JNI bridge (final shared lib) ----------
 add_library(airplay_jni SHARED airplay_jni.c)
-set(OPENSSL_DIR ${CMAKE_SOURCE_DIR}/openssl/${ANDROID_ABI})
 message(STATUS "OPENSSL_DIR = ${OPENSSL_DIR}")
 file(GLOB CRYPTO_LIB ${OPENSSL_DIR}/lib/libcrypto.a)
 file(GLOB SSL_LIB ${OPENSSL_DIR}/lib/libssl.a)
