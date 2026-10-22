@@ -37,7 +37,7 @@ jobs:
           cd openssl-3.0.15
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
           PREFIX=$GITHUB_WORKSPACE/app/src/main/jni/openssl/armeabi-v7a
-          ./Configure android-arm -D__ANDROID_API__=21 no-shared no-tests no-ui-console no-apps --prefix=$PREFIX
+          ./Configure android-arm -D__ANDROID_API__=21 no-shared no-tests --prefix=$PREFIX
           make -j4
           make install_sw
           echo "openssl installed:"; ls -la $PREFIX/lib
