@@ -20,9 +20,9 @@ void __FD_CLR_chk(int fd, fd_set *set, size_t set_size) {
     bits[fd / FD_BITS_PER_SLOT] &= ~(1UL << (fd % FD_BITS_PER_SLOT));
 }
 
-int __FD_ISSET_chk(int fd, fd_set *set, size_t set_size) {
+int __FD_ISSET_chk(int fd, const fd_set *set, size_t set_size) {
     (void) set_size;
     if (!set || fd < 0 || fd >= FD_SETSIZE) return 0;
-    unsigned long *bits = (unsigned long *) set->fds_bits;
+    const unsigned long *bits = (const unsigned long *) set->fds_bits;
     return (bits[fd / FD_BITS_PER_SLOT] & (1UL << (fd % FD_BITS_PER_SLOT))) != 0;
 }
