@@ -204,7 +204,8 @@ Java_com_gathin_tvhome_AirPlayReceiver_nativeStart(JNIEnv *env, jobject thiz,
     raop_set_tcp_ports(g_raop, tcp);
     raop_set_udp_ports(g_raop, udp);
     raop_port = raop_get_port(g_raop);
-    if (raop_start_httpd(g_raop, &raop_port)) { LOGE("raop_start_httpd failed"); goto fail; }
+    /* httpd_start returns 1 on success, 0 if already running, <0 on error. */
+    if (raop_start_httpd(g_raop, &raop_port) < 0) { LOGE("raop_start_httpd failed"); goto fail; }
     raop_set_port(g_raop, raop_port);
     LOGI("raop httpd on port %d", raop_port);
 
