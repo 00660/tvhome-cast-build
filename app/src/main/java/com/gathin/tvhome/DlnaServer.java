@@ -231,7 +231,7 @@ final class DlnaServer {
     private String handleSoap(String soapAction, String xml) {
         String action = lastSegment(soapAction);
         if (action.isEmpty()) action = guessAction(xml);
-        DlnaPlayer dp = DlnaPlayer.get();
+        DlnaPlayer dp = DlnaPlayer.get(app);
 
         if (action.equals("SetAVTransportURI")) {
             String uri = extract(xml, "CurrentURI");
