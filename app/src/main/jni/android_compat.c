@@ -83,3 +83,9 @@ int sigdelset(sigset_t *set, int signum) {
     bits[b / (8 * sizeof(unsigned long))] &= ~(1UL << (b % (8 * sizeof(unsigned long))));
     return 0;
 }
+
+int sigemptyset(sigset_t *set) {
+    if (!set) { errno = EINVAL; return -1; }
+    memset(set, 0, sizeof(*set));
+    return 0;
+}
