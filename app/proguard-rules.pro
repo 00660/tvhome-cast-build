@@ -14,3 +14,10 @@
 -keep class com.gathin.tvhome.AirPlayReceiver { *; }
 -keepclasseswithmembernames class * { native <methods>; }
 -keep class com.gathin.tvhome.DlnaPlaybackActivity { *; }
+
+# libVLC: keep all classes/interfaces (R8 was stripping inner interfaces -> ClassNotFound on 4.4)
+-keep class org.videolan.** { *; }
+-keep interface org.videolan.** { *; }
+-dontwarn org.videolan.**
+-keep class com.gathin.tvhome.DlnaPlayer { *; }
+-keep class com.gathin.tvhome.DlnaPlaybackActivity { *; }
