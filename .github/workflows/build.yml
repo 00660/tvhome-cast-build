@@ -1,4 +1,4 @@
-name: Build TV Home + Cast APK
+name: Build TV Home + Cast APK (API19)
 
 on:
   push:
@@ -17,18 +17,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Configure Android SDK/NDK
+      - name: Install NDK r21e (supports Android 4.4 / API19 native builds)
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          ls "$ANDROID_HOME/ndk" || true
-          NDK_DIR=$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | head -1)
-          echo "Using NDK: $NDK_DIR"
-          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$NDK_DIR" >> "$GITHUB_ENV"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          set -e
+          cd "$ANDROID_HOME"
+          curl -sSL -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip
+          unzip -q /tmp/ndk.zip -d /tmp/ndk
+          mkdir -p "$ANDROID_HOME/ndk"
+          mv /tmp/ndk/android-ndk-r21e "$ANDROID_HOME/ndk/21.4.7075529"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/21.4.7075529" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/21.4.7075529" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/ndk/21.4.7075529/ndk-build" --version || true
 
-      - name: Build OpenSSL for armeabi-v7a
+      - name: Build OpenSSL for armeabi-v7a (API19)
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"
@@ -37,10 +38,10 @@ jobs:
           cd openssl-3.0.15
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
           PREFIX=$GITHUB_WORKSPACE/app/src/main/jni/openssl/armeabi-v7a
-          ./Configure android-arm -D__ANDROID_API__=21 no-shared no-tests --prefix=$PREFIX >/dev/null 2>&1
+          ./Configure android-arm -D__ANDROID_API__=19 no-shared no-tests --prefix=$PREFIX >/dev/null 2>&1
           make -j4 >/tmp/ossl_make.log 2>&1 || { echo "OPENSSL MAKE FAILED"; tail -40 /tmp/ossl_make.log; exit 1; }
           make install_sw >/dev/null 2>&1
-          echo "openssl installed:"; ls -la $PREFIX/lib
+          echo "openssl installed (API19):"; ls -la $PREFIX/lib
 
       - name: Build APK
         run: |
@@ -49,7 +50,7 @@ jobs:
           ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log || true
           if grep -q "BUILD SUCCESSFUL" /tmp/gradle.log; then echo "GRADLE OK"; else
             echo "===== GRADLE ERRORS ====="
-            grep -nE "error:|CMake Error|CMakeLists|ninja: error|undefined reference|Execution failed|What went wrong|FAILED|ld: |cannot find|No such file|fatal error" /tmp/gradle.log | tail -80
+            grep -nE "error:|CMake Error|ninja: error|undefined reference|Execution failed|What went wrong|FAILED|ld: |cannot find|No such file|fatal error" /tmp/gradle.log | tail -80
             echo "===== END ====="
             exit 1
           fi
