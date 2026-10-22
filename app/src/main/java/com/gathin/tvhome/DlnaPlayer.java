@@ -15,7 +15,6 @@ import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.ProgressiveMediaSource;
-import com.google.android.exoplayer2.source.hls.HlsMediaSource;
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
 import com.google.android.exoplayer2.upstream.DefaultDataSource;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
@@ -144,13 +143,8 @@ final class DlnaPlayer {
             DefaultDataSource.Factory ds = new DefaultDataSource.Factory(app,
                     new DefaultHttpDataSource.Factory().setUserAgent("DLNA/1.0").setAllowCrossProtocolRedirects(true));
             Uri u = Uri.parse(uri);
-            String path = u.getPath() == null ? "" : u.getPath().toLowerCase();
-            MediaSource src;
-            if (path.endsWith(".m3u8")) {
-                src = new HlsMediaSource.Factory(ds).createMediaSource(MediaItem.fromUri(u));
-            } else {
-                src = new ProgressiveMediaSource.Factory(ds).createMediaSource(MediaItem.fromUri(u));
-            }
+            MediaSource src = new ProgressiveMediaSource.Factory(ds)
+                    .createMediaSource(MediaItem.fromUri(u));
             p.setMediaSource(src);
             p.setPlayWhenReady(true);
             p.prepare();
