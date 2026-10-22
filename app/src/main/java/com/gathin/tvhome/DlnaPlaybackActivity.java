@@ -4,14 +4,12 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.View;
 import android.widget.FrameLayout;
 
-/** Full-screen renderer for media pushed over DLNA. Kept as its own Activity so the phone's
- *  "cast" can bring the video up over the launcher; Back returns to the desktop. */
-public final class DlnaPlaybackActivity extends Activity implements SurfaceHolder.Callback {
+/** Full-screen renderer for media pushed over DLNA. Uses libVLC (FFmpeg) for software decoding of
+ *  high-bitrate FLV/HLS/MP4 that this TV's hardware codec cannot handle. Back returns to desktop. */
+public final class DlnaPlaybackActivity extends Activity {
     private SurfaceView surfaceView;
     private SelfDrawnUi.TextLine hint;
 
@@ -21,7 +19,6 @@ public final class DlnaPlaybackActivity extends Activity implements SurfaceHolde
         root.setBackgroundColor(0xFF000000);
 
         surfaceView = new SurfaceView(this);
-        surfaceView.getHolder().addCallback(this);
         root.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
 
         hint = new SelfDrawnUi.TextLine(this, getString(R.string.dlna_casting), SelfDrawnUi.TextLine.SECTION);
@@ -31,8 +28,10 @@ public final class DlnaPlaybackActivity extends Activity implements SurfaceHolde
         hint.setAlpha(0.85f);
 
         setContentView(root);
-        handleIntent(getIntent());
+
         DlnaPlayer.get(this).setListener(this::refreshHint);
+        DlnaPlayer.get(this).setSurfaceView(surfaceView);
+        handleIntent(getIntent());
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -52,26 +51,6 @@ public final class DlnaPlaybackActivity extends Activity implements SurfaceHolde
         String s = DlnaPlayer.get(this).getState();
         hint.setText(getString("PLAYING".equals(s) ? R.string.dlna_casting
                 : "TRANSITIONING".equals(s) ? R.string.dlna_loading : R.string.dlna_casting));
-    }
-
-    @Override public void surfaceCreated(SurfaceHolder holder) {
-        DlnaPlayer.get(this).setSurface(holder.getSurface());
-    }
-
-    @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        DlnaPlayer.get(this).setSurface(holder.getSurface());
-    }
-
-    @Override public void surfaceDestroyed(SurfaceHolder holder) {
-        DlnaPlayer.get(this).clearSurface();
-    }
-
-    @Override protected void onResume() {
-        super.onResume();
-        if (surfaceView != null && surfaceView.getHolder().getSurface() != null
-                && surfaceView.getHolder().getSurface().isValid()) {
-            DlnaPlayer.get(this).setSurface(surfaceView.getHolder().getSurface());
-        }
     }
 
     @Override public void onBackPressed() {
