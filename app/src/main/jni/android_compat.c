@@ -55,9 +55,16 @@ int getentropy(void *buffer, size_t length) {
     return 0;
 }
 
-/* signal() and sigfillset()/sigdelset() are exported by API21 bionic but not 4.4. */
+/* signal() and sigfillset()/sigdelset() are exported by API21 bionic but not 4.4.
+ * Implement signal() on top of sigaction (which 4.4 does export). */
 sighandler_t signal(int signum, sighandler_t handler) {
-    return bsd_signal(signum, handler);
+    struct sigaction sa, old;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(signum, &sa, &old) != 0) return SIG_ERR;
+    return old.sa_handler;
 }
 int sigfillset(sigset_t *set) {
     if (!set) { errno = EINVAL; return -1; }
