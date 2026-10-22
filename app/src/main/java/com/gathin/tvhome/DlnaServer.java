@@ -207,6 +207,12 @@ final class DlnaServer {
             String pathOnly = path.split("\\?")[0];
             if (pathOnly.equals("/dd.xml")) {
                 respond(socket, 200, "text/xml; charset=utf-8", descriptionXml().getBytes("UTF-8"));
+            } else if (pathOnly.equals("/scpd/avt.xml")) {
+                respond(socket, 200, "text/xml; charset=utf-8", scpdAvTransport().getBytes("UTF-8"));
+            } else if (pathOnly.equals("/scpd/rcs.xml")) {
+                respond(socket, 200, "text/xml; charset=utf-8", scpdRenderingControl().getBytes("UTF-8"));
+            } else if (pathOnly.equals("/scpd/cms.xml")) {
+                respond(socket, 200, "text/xml; charset=utf-8", scpdConnectionManager().getBytes("UTF-8"));
             } else if (pathOnly.equals("/control") || pathOnly.startsWith("/control/")) {
                 String xml = new String(body, "UTF-8");
                 String resp = handleSoap(soapAction, xml);
@@ -325,7 +331,7 @@ final class DlnaServer {
 
     private String descriptionXml() {
         String base = "http://" + localIp + ":" + httpPort;
-        return "<?xml version=\"1.0\"?>"
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                 + "<root xmlns=\"urn:schemas-upnp-org:device-1-0\"><specVersion><major>1</major><minor>0</minor></specVersion>"
                 + "<device>"
                 + "<deviceType>" + DEVICE_TYPE + "</deviceType>"
@@ -335,17 +341,116 @@ final class DlnaServer {
                 + "<modelName>TV Renderer</modelName><modelNumber>1</modelNumber><modelURL>" + base + "</modelURL>"
                 + "<UDN>" + uuid + "</UDN>"
                 + "<serviceList>"
-                + service(AVT, "urn:schemas-upnp-org:serviceId:AVTransport", "/control", "/event")
-                + service(RCS, "urn:schemas-upnp-org:serviceId:RenderingControl", "/control", "/event")
-                + service(CMS, "urn:schemas-upnp-org:serviceId:ConnectionManager", "/control", "/event")
+                + service(AVT, "urn:schemas-upnp-org:serviceId:AVTransport", "/control", "/event", "/scpd/avt.xml")
+                + service(RCS, "urn:schemas-upnp-org:serviceId:RenderingControl", "/control", "/event", "/scpd/rcs.xml")
+                + service(CMS, "urn:schemas-upnp-org:serviceId:ConnectionManager", "/control", "/event", "/scpd/cms.xml")
                 + "</serviceList>"
                 + "</device></root>";
     }
 
-    private String service(String type, String id, String control, String event) {
+    private String service(String type, String id, String control, String event, String scpd) {
         return "<service><serviceType>" + type + "</serviceType><serviceId>" + id + "</serviceId>"
                 + "<controlURL>" + control + "</controlURL><eventSubURL>" + event + "</eventSubURL>"
-                + "<SCPDURL>/dd.xml</SCPDURL></service>";
+                + "<SCPDURL>" + scpd + "</SCPDURL></service>";
+    }
+
+    /** Minimal but valid SCPD (service description) documents. Control points fetch these to learn
+     *  each service's actions/state variables; without them the renderer is not usable. */
+    private String scpdAvTransport() {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?><scpd xmlns=\"urn:schemas-upnp-org:service-1-0\">"
+            + "<specVersion><major>1</major><minor>0</minor></specVersion><actionList>"
+            + avtAction("SetAVTransportURI","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>CurrentURI</name><direction>in</direction><relatedStateVariable>AVTransportURI</relatedStateVariable></argument><argument><name>CurrentURIMetaData</name><direction>in</direction><relatedStateVariable>AVTransportURIMetaData</relatedStateVariable></argument>")
+            + avtAction("Play","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Speed</name><direction>in</direction><relatedStateVariable>TransportPlaySpeed</relatedStateVariable></argument>")
+            + avtAction("Pause","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument>")
+            + avtAction("Stop","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument>")
+            + avtAction("Seek","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Unit</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_SeekMode</relatedStateVariable></argument><argument><name>Target</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_SeekTarget</relatedStateVariable></argument>")
+            + avtAction("GetTransportInfo","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>CurrentTransportState</name><direction>out</direction><relatedStateVariable>TransportState</relatedStateVariable></argument><argument><name>CurrentTransportStatus</name><direction>out</direction><relatedStateVariable>TransportStatus</relatedStateVariable></argument><argument><name>CurrentSpeed</name><direction>out</direction><relatedStateVariable>TransportPlaySpeed</relatedStateVariable></argument>")
+            + avtAction("GetPositionInfo","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Track</name><direction>out</direction><relatedStateVariable>CurrentTrack</relatedStateVariable></argument><argument><name>TrackDuration</name><direction>out</direction><relatedStateVariable>CurrentTrackDuration</relatedStateVariable></argument><argument><name>TrackMetaData</name><direction>out</direction><relatedStateVariable>CurrentTrackMetaData</relatedStateVariable></argument><argument><name>TrackURI</name><direction>out</direction><relatedStateVariable>CurrentTrackURI</relatedStateVariable></argument><argument><name>RelTime</name><direction>out</direction><relatedStateVariable>RelativeTimePosition</relatedStateVariable></argument><argument><name>AbsTime</name><direction>out</direction><relatedStateVariable>AbsoluteTimePosition</relatedStateVariable></argument><argument><name>RelCount</name><direction>out</direction><relatedStateVariable>RelativeCounterPosition</relatedStateVariable></argument><argument><name>AbsCount</name><direction>out</direction><relatedStateVariable>AbsoluteCounterPosition</relatedStateVariable></argument>")
+            + avtAction("GetMediaInfo","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>NrTracks</name><direction>out</direction><relatedStateVariable>NumberOfTracks</relatedStateVariable></argument><argument><name>MediaDuration</name><direction>out</direction><relatedStateVariable>CurrentMediaDuration</relatedStateVariable></argument><argument><name>CurrentURI</name><direction>out</direction><relatedStateVariable>AVTransportURI</relatedStateVariable></argument><argument><name>CurrentURIMetaData</name><direction>out</direction><relatedStateVariable>AVTransportURIMetaData</relatedStateVariable></argument><argument><name>NextURI</name><direction>out</direction><relatedStateVariable>NextAVTransportURI</relatedStateVariable></argument><argument><name>NextURIMetaData</name><direction>out</direction><relatedStateVariable>NextAVTransportURIMetaData</relatedStateVariable></argument><argument><name>PlayMedium</name><direction>out</direction><relatedStateVariable>PlaybackStorageMedium</relatedStateVariable></argument><argument><name>RecordMedium</name><direction>out</direction><relatedStateVariable>RecordStorageMedium</relatedStateVariable></argument><argument><name>WriteStatus</name><direction>out</direction><relatedStateVariable>RecordMediumWriteStatus</relatedStateVariable></argument>")
+            + avtAction("GetDeviceCapabilities","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>PlayMedia</name><direction>out</direction><relatedStateVariable>PossiblePlaybackStorageMedia</relatedStateVariable></argument><argument><name>RecMedia</name><direction>out</direction><relatedStateVariable>PossibleRecordStorageMedia</relatedStateVariable></argument><argument><name>RecQualityModes</name><direction>out</direction><relatedStateVariable>PossibleRecordQualityModes</relatedStateVariable></argument>")
+            + avtAction("GetTransportSettings","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>PlayMode</name><direction>out</direction><relatedStateVariable>CurrentPlayMode</relatedStateVariable></argument><argument><name>RecQualityMode</name><direction>out</direction><relatedStateVariable>CurrentRecordQualityMode</relatedStateVariable></argument>")
+            + "</actionList><serviceStateTable>"
+            + var("A_ARG_TYPE_InstanceID","ui4","no")
+            + var("AVTransportURI","string","no")
+            + var("AVTransportURIMetaData","string","no")
+            + var("NextAVTransportURI","string","no")
+            + var("NextAVTransportURIMetaData","string","no")
+            + var("TransportState","string","no","STOPPED,PLAYING,PAUSED_PLAYBACK,TRANSITIONING,NO_MEDIA_PRESENT")
+            + var("TransportStatus","string","no","OK,ERROR_OCCURRED")
+            + var("TransportPlaySpeed","string","no","1")
+            + var("CurrentTrack","ui4","no")
+            + var("CurrentTrackDuration","string","no")
+            + var("CurrentMediaDuration","string","no")
+            + var("CurrentTrackMetaData","string","no")
+            + var("CurrentTrackURI","string","no")
+            + var("RelativeTimePosition","string","no")
+            + var("AbsoluteTimePosition","string","no")
+            + var("RelativeCounterPosition","i4","no")
+            + var("AbsoluteCounterPosition","i4","no")
+            + var("NumberOfTracks","ui4","no")
+            + var("PlaybackStorageMedium","string","no","NETWORK,NONE")
+            + var("RecordStorageMedium","string","no","NOT_IMPLEMENTED")
+            + var("PossiblePlaybackStorageMedia","string","no")
+            + var("PossibleRecordStorageMedia","string","no")
+            + var("PossibleRecordQualityModes","string","no")
+            + var("RecordMediumWriteStatus","string","no","NOT_IMPLEMENTED")
+            + var("CurrentPlayMode","string","no","NORMAL")
+            + var("CurrentRecordQualityMode","string","no","NOT_IMPLEMENTED")
+            + var("A_ARG_TYPE_SeekMode","string","no","REL_TIME,TRACK_NR")
+            + var("A_ARG_TYPE_SeekTarget","string","no")
+            + "</serviceStateTable></scpd>";
+    }
+
+    private String scpdRenderingControl() {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?><scpd xmlns=\"urn:schemas-upnp-org:service-1-0\">"
+            + "<specVersion><major>1</major><minor>0</minor></specVersion><actionList>"
+            + avtAction("GetVolume","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Channel</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable></argument><argument><name>CurrentVolume</name><direction>out</direction><relatedStateVariable>Volume</relatedStateVariable></argument>")
+            + avtAction("SetVolume","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Channel</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable></argument><argument><name>DesiredVolume</name><direction>in</direction><relatedStateVariable>Volume</relatedStateVariable></argument>")
+            + avtAction("GetMute","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Channel</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable></argument><argument><name>CurrentMute</name><direction>out</direction><relatedStateVariable>Mute</relatedStateVariable></argument>")
+            + avtAction("SetMute","<argument><name>InstanceID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_InstanceID</relatedStateVariable></argument><argument><name>Channel</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_Channel</relatedStateVariable></argument><argument><name>DesiredMute</name><direction>in</direction><relatedStateVariable>Mute</relatedStateVariable></argument>")
+            + "</actionList><serviceStateTable>"
+            + var("A_ARG_TYPE_InstanceID","ui4","no")
+            + var("A_ARG_TYPE_Channel","string","no","Master")
+            + var("Volume","ui2","no","0-100")
+            + var("Mute","boolean","no")
+            + "</serviceStateTable></scpd>";
+    }
+
+    private String scpdConnectionManager() {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?><scpd xmlns=\"urn:schemas-upnp-org:service-1-0\">"
+            + "<specVersion><major>1</major><minor>0</minor></specVersion><actionList>"
+            + avtAction("GetProtocolInfo","<argument><name>Source</name><direction>out</direction><relatedStateVariable>SourceProtocolInfo</relatedStateVariable></argument><argument><name>Sink</name><direction>out</direction><relatedStateVariable>SinkProtocolInfo</relatedStateVariable></argument>")
+            + avtAction("GetCurrentConnectionIDs","<argument><name>ConnectionIDs</name><direction>out</direction><relatedStateVariable>CurrentConnectionIDs</relatedStateVariable></argument>")
+            + avtAction("GetCurrentConnectionInfo","<argument><name>ConnectionID</name><direction>in</direction><relatedStateVariable>A_ARG_TYPE_ConnectionID</relatedStateVariable></argument><argument><name>RcsID</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_RcsID</relatedStateVariable></argument><argument><name>AVTransportID</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_AVTransportID</relatedStateVariable></argument><argument><name>ProtocolInfo</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_ProtocolInfo</relatedStateVariable></argument><argument><name>PeerConnectionManager</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_ConnectionManager</relatedStateVariable></argument><argument><name>PeerConnectionID</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_ConnectionID</relatedStateVariable></argument><argument><name>Direction</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_Direction</relatedStateVariable></argument><argument><name>Status</name><direction>out</direction><relatedStateVariable>A_ARG_TYPE_ConnectionStatus</relatedStateVariable></argument>")
+            + "</actionList><serviceStateTable>"
+            + var("SourceProtocolInfo","string","no")
+            + var("SinkProtocolInfo","string","no")
+            + var("CurrentConnectionIDs","string","no")
+            + var("A_ARG_TYPE_ConnectionStatus","string","no","OK,ContentFormatMismatch,InsufficientBandwidth,UnreliableChannel,Unknown")
+            + var("A_ARG_TYPE_ConnectionManager","string","no")
+            + var("A_ARG_TYPE_Direction","string","no","Input,Output")
+            + var("A_ARG_TYPE_ProtocolInfo","string","no")
+            + var("A_ARG_TYPE_ConnectionID","i4","no")
+            + var("A_ARG_TYPE_AVTransportID","i4","no")
+            + var("A_ARG_TYPE_RcsID","i4","no")
+            + "</serviceStateTable></scpd>";
+    }
+
+    private String avtAction(String name, String args) {
+        return "<action><name>" + name + "</name>" + (args.isEmpty() ? "" : "<argumentList>" + args + "</argumentList>") + "</action>";
+    }
+
+    private String var(String name, String type, String sendEvents) {
+        return var(name, type, sendEvents, null);
+    }
+    private String var(String name, String type, String sendEvents, String allowed) {
+        return "<stateVariable sendEvents=\"" + sendEvents + "\"><name>" + name + "</name><dataType>" + type + "</dataType>"
+            + (allowed == null ? "" : "<allowedValueList>" + joinAllowed(allowed) + "</allowedValueList>") + "</stateVariable>";
+    }
+    private String joinAllowed(String csv) {
+        StringBuilder b = new StringBuilder();
+        for (String v : csv.split(",")) b.append("<allowedValue>").append(v).append("</allowedValue>");
+        return b.toString();
     }
 
     // ---- helpers ------------------------------------------------------------------------------
