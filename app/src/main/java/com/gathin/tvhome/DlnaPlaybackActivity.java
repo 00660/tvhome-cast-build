@@ -4,13 +4,14 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.view.SurfaceView;
 import android.widget.FrameLayout;
 
-/** Full-screen renderer for media pushed over DLNA. Uses libVLC (FFmpeg) for software decoding of
- *  high-bitrate FLV/HLS/MP4 that this TV's hardware codec cannot handle. Back returns to desktop. */
+import org.videolan.libvlc.util.VLCVideoLayout;
+
+/** Full-screen renderer for media pushed over DLNA. Uses libVLC (FFmpeg) + VLCVideoLayout for
+ *  software decoding + full-screen video of high-bitrate FLV/HLS/MP4. Back returns to desktop. */
 public final class DlnaPlaybackActivity extends Activity {
-    private SurfaceView surfaceView;
+    private VLCVideoLayout videoLayout;
     private SelfDrawnUi.TextLine hint;
 
     @Override protected void onCreate(Bundle state) {
@@ -18,8 +19,8 @@ public final class DlnaPlaybackActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF000000);
 
-        surfaceView = new SurfaceView(this);
-        root.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
+        videoLayout = new VLCVideoLayout(this);
+        root.addView(videoLayout, new FrameLayout.LayoutParams(-1, -1));
 
         hint = new SelfDrawnUi.TextLine(this, getString(R.string.dlna_casting), SelfDrawnUi.TextLine.SECTION);
         FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
@@ -30,7 +31,7 @@ public final class DlnaPlaybackActivity extends Activity {
         setContentView(root);
 
         DlnaPlayer.get(this).setListener(this::refreshHint);
-        DlnaPlayer.get(this).setSurfaceView(surfaceView);
+        DlnaPlayer.get(this).setVideoLayout(videoLayout);
         handleIntent(getIntent());
     }
 
