@@ -37,15 +37,22 @@ jobs:
           cd openssl-3.0.15
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
           PREFIX=$GITHUB_WORKSPACE/app/src/main/jni/openssl/armeabi-v7a
-          ./Configure android-arm -D__ANDROID_API__=21 no-shared no-tests --prefix=$PREFIX
-          make -j4
-          make install_sw
+          ./Configure android-arm -D__ANDROID_API__=21 no-shared no-tests --prefix=$PREFIX >/dev/null 2>&1
+          make -j4 >/tmp/ossl_make.log 2>&1 || { echo "OPENSSL MAKE FAILED"; tail -40 /tmp/ossl_make.log; exit 1; }
+          make install_sw >/dev/null 2>&1
           echo "openssl installed:"; ls -la $PREFIX/lib
 
       - name: Build APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log || true
+          if grep -q "BUILD SUCCESSFUL" /tmp/gradle.log; then echo "GRADLE OK"; else
+            echo "===== GRADLE ERRORS ====="
+            grep -nE "error:|CMake Error|CMakeLists|ninja: error|undefined reference|Execution failed|What went wrong|FAILED|ld: |cannot find|No such file|fatal error" /tmp/gradle.log | tail -80
+            echo "===== END ====="
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
