@@ -5,18 +5,18 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
-import android.view.SurfaceView;
 
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
+import org.videolan.libvlc.util.VLCVideoLayout;
 
 import java.util.ArrayList;
 
 /**
  * Shared DLNA playback engine built on libVLC (FFmpeg-based). libVLC software-decodes formats and
  * bitrates this TV's hardware codec cannot (high-bitrate FLV/HLS), and supports Android 4.4.
- * Rendered onto the SurfaceView from {@link DlnaPlaybackActivity}.
+ * Video is shown full-screen through a {@link VLCVideoLayout}, which manages sizing/aspect for us.
  */
 final class DlnaPlayer {
     interface Listener { void onStateChanged(); }
@@ -32,7 +32,7 @@ final class DlnaPlayer {
     private final Context app;
     private LibVLC libVlc;
     private MediaPlayer player;
-    private SurfaceView surfaceView;
+    private VLCVideoLayout videoLayout;
     private String uri;
     private String state = NO_MEDIA;
     private Listener listener;
@@ -55,11 +55,15 @@ final class DlnaPlayer {
             ArrayList<String> args = new ArrayList<>();
             args.add("--no-drop-late-frames");
             args.add("--no-skip-frames");
-            args.add("--avcodec-hw=none");   // force software decode (FFmpeg) — hardware can't do HD here
+            args.add("--avcodec-hw=none");   // force software decode (FFmpeg)
             args.add("--network-caching=1500");
             libVlc = new LibVLC(app, args);
         }
         return libVlc;
+    }
+
+    synchronized void setVideoLayout(final VLCVideoLayout layout) {
+        videoLayout = layout;
     }
 
     synchronized void setUri(final String newUri) {
@@ -72,17 +76,8 @@ final class DlnaPlayer {
         });
     }
 
-    synchronized void setSurfaceView(final SurfaceView sv) {
-        surfaceView = sv;
-        main.post(() -> { if (player != null && sv != null) player.getVLCVout().setVideoView(sv); });
-    }
-
     synchronized void play() {
-        main.post(() -> {
-            if (player == null) { maybePrepare(); return; }
-            player.play();
-            state = PLAYING; notifyChanged();
-        });
+        main.post(() -> { if (player == null) { maybePrepare(); return; } player.play(); state = PLAYING; notifyChanged(); });
     }
     synchronized void pause() {
         main.post(() -> { if (player != null && player.isPlaying()) { player.pause(); state = PAUSED; notifyChanged(); } });
@@ -90,14 +85,12 @@ final class DlnaPlayer {
     synchronized void stop() {
         main.post(() -> { if (player != null) { player.stop(); state = STOPPED; notifyChanged(); } });
     }
-    synchronized void seek(int ms) {
-        main.post(() -> { if (player != null) player.setTime(ms); });
-    }
+    synchronized void seek(int ms) { main.post(() -> { if (player != null) player.setTime(ms); }); }
     int position() { try { return player != null ? (int) player.getTime() : 0; } catch (Exception e) { return 0; } }
     int duration() { try { long d = player != null ? player.getLength() : 0; return d > 0 ? (int) d : 0; } catch (Exception e) { return 0; } }
 
     private void maybePrepare() {
-        if (uri == null) return;
+        if (uri == null || videoLayout == null) { if (uri != null) Log.w("DLNA","no videoLayout yet"); return; }
         releasePlayer();
         try {
             MediaPlayer p = new MediaPlayer(vlc());
@@ -109,19 +102,13 @@ final class DlnaPlayer {
                     case MediaPlayer.Event.Paused: state = PAUSED; break;
                     case MediaPlayer.Event.Stopped: state = STOPPED; break;
                     case MediaPlayer.Event.EndReached: state = STOPPED; break;
-                    case MediaPlayer.Event.EncounteredError:
-                        Log.e("DLNA", "vlc error");
-                        state = STOPPED; break;
-                    case MediaPlayer.Event.Vout:
-                        Log.i("DLNA", "vlc vout (video output attached)"); break;
+                    case MediaPlayer.Event.EncounteredError: Log.e("DLNA","vlc error"); state = STOPPED; break;
+                    case MediaPlayer.Event.Vout: Log.i("DLNA","vlc vout"); break;
                 }
                 notifyChanged();
             });
-            if (surfaceView != null) {
-                p.getVLCVout().setVideoView(surfaceView);
-            }
-            p.getVLCVout().attachViews();
-            syncVlcSize();
+            // VLCVideoLayout handles full-screen surface sizing and aspect ratio automatically.
+            p.attachViews(videoLayout, null, false, false);
             Media m = new Media(vlc(), Uri.parse(uri));
             m.setHWDecoderEnabled(false, false);   // software decode
             p.setMedia(m);
@@ -137,30 +124,10 @@ final class DlnaPlayer {
         }
     }
 
-    private void syncVlcSize() {
-        if (player == null || surfaceView == null) return;
-        // Retry a few times: at attach time the SurfaceView may not be laid out yet (width==0),
-        // which left libVLC rendering into a small default window.
-        for (long delay : new long[]{0, 150, 500, 1200}) {
-            surfaceView.postDelayed(() -> {
-                if (player == null || surfaceView == null) return;
-                try {
-                    int w = surfaceView.getWidth(), h = surfaceView.getHeight();
-                    if (w <= 0 || h <= 0) {
-                        android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();
-                        w = dm.widthPixels; h = dm.heightPixels;
-                    }
-                    player.getVLCVout().setWindowSize(w, h);
-                    Log.i("DLNA", "vlc window size " + w + "x" + h);
-                } catch (Throwable t) { Log.e("DLNA", "setWindowSize fail", t); }
-            }, delay);
-        }
-    }
-
     private void releasePlayer() {
         if (player != null) {
-            try { player.getVLCVout().detachViews(); } catch (Exception ignored) { }
             try { player.stop(); } catch (Exception ignored) { }
+            try { player.detachViews(); } catch (Exception ignored) { }
             try { player.release(); } catch (Exception ignored) { }
             player = null;
         }
