@@ -1,0 +1,8 @@
+build/
+.gradle/
+local.properties
+app/build/
+app/src/main/jni/openssl/
+openssl-3.0.15/
+openssl.tar.gz
+*.iml
