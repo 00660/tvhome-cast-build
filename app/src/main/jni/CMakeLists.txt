@@ -53,14 +53,17 @@ target_link_libraries(airplay PUBLIC plist playfair dnssd llhttp)
 # ---------- JNI bridge (final shared lib) ----------
 add_library(airplay_jni SHARED airplay_jni.c)
 set(OPENSSL_DIR ${CMAKE_SOURCE_DIR}/openssl/${ANDROID_ABI})
+message(STATUS "OPENSSL_DIR = ${OPENSSL_DIR}")
+file(GLOB CRYPTO_LIB ${OPENSSL_DIR}/lib/libcrypto.a)
+file(GLOB SSL_LIB ${OPENSSL_DIR}/lib/libssl.a)
+message(STATUS "CRYPTO_LIB = ${CRYPTO_LIB}")
+message(STATUS "SSL_LIB = ${SSL_LIB}")
 target_include_directories(airplay_jni PRIVATE
     ${CMAKE_SOURCE_DIR}/uxplay-lib
     ${CMAKE_SOURCE_DIR}/uxplay-lib/playfair
     ${CMAKE_SOURCE_DIR}/uxplay-lib/llhttp
     ${CMAKE_SOURCE_DIR}/libplist/include
     ${OPENSSL_DIR}/include)
-find_library(CRYPTO_LIB NAMES crypto libcrypto.a PATHS ${OPENSSL_DIR}/lib NO_DEFAULT_PATH)
-find_library(SSL_LIB NAMES ssl libssl.a PATHS ${OPENSSL_DIR}/lib NO_DEFAULT_PATH)
 target_link_libraries(airplay_jni
     airplay plist playfair dnssd llhttp
     ${CRYPTO_LIB} ${SSL_LIB}
