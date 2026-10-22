@@ -54,7 +54,7 @@ target_compile_definitions(airplay PUBLIC
 target_link_libraries(airplay PUBLIC plist playfair dnssd llhttp)
 
 # ---------- JNI bridge (final shared lib) ----------
-add_library(airplay_jni SHARED airplay_jni.c)
+add_library(airplay_jni SHARED airplay_jni.c android_compat.c)
 message(STATUS "OPENSSL_DIR = ${OPENSSL_DIR}")
 file(GLOB CRYPTO_LIB ${OPENSSL_DIR}/lib/libcrypto.a)
 file(GLOB SSL_LIB ${OPENSSL_DIR}/lib/libssl.a)
