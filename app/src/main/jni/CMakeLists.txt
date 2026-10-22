@@ -49,7 +49,7 @@ target_include_directories(airplay PUBLIC
     ${CMAKE_SOURCE_DIR}/libplist/src
     ${OPENSSL_DIR}/include)
 target_compile_definitions(airplay PUBLIC
-    -DNOHOLD -DSTANDALONE -DPLIST_230=1 -DOPENSSL_API_COMPAT=0x10101000L)
+    -DNOHOLD -DSTANDALONE -DPLIST_210=1 -DPLIST_230=1 -DOPENSSL_API_COMPAT=0x10101000L)
 target_link_libraries(airplay PUBLIC plist playfair dnssd llhttp)
 
 # ---------- JNI bridge (final shared lib) ----------
