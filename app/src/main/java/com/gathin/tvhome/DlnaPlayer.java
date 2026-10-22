@@ -121,6 +121,7 @@ final class DlnaPlayer {
                 p.getVLCVout().setVideoView(surfaceView);
             }
             p.getVLCVout().attachViews();
+            syncVlcSize();
             Media m = new Media(vlc(), Uri.parse(uri));
             m.setHWDecoderEnabled(false, false);   // software decode
             p.setMedia(m);
@@ -134,6 +135,19 @@ final class DlnaPlayer {
             Log.e("DLNA", "vlc prepare failed", t);
             state = STOPPED; notifyChanged();
         }
+    }
+
+    private void syncVlcSize() {
+        if (player == null || surfaceView == null) return;
+        surfaceView.post(() -> {
+            try {
+                int w = surfaceView.getWidth(), h = surfaceView.getHeight();
+                if (w > 0 && h > 0) {
+                    player.getVLCVout().setWindowSize(w, h);
+                    Log.i("DLNA", "vlc window size " + w + "x" + h);
+                }
+            } catch (Throwable t) { Log.e("DLNA", "setWindowSize fail", t); }
+        });
     }
 
     private void releasePlayer() {
