@@ -44,7 +44,7 @@ public final class AirPlayReceiver {
 
     public boolean start(Context ctx, String name, int width, int height) {
         if (started) return true;
-        if (Build.VERSION.SDK_INT < 21) { Log.w(TAG, "AirPlay decode needs API21+"); }
+        Log.i(TAG, "AirPlay start on API " + Build.VERSION.SDK_INT);
         String mac = "AA:BB:CC:DD:EE:FF";
         String keyfile = new java.io.File(ctx.getFilesDir(), "airplay.key").getAbsolutePath();
         try {
@@ -101,7 +101,6 @@ public final class AirPlayReceiver {
 
     private synchronized void initVideo(boolean h265) {
         releaseVideo();
-        if (Build.VERSION.SDK_INT < 21) return;
         try {
             String mime = h265 ? MIME_H265 : MIME_H264;
             MediaFormat fmt = MediaFormat.createVideoFormat(mime, 1920, 1080);
@@ -134,7 +133,12 @@ public final class AirPlayReceiver {
         try {
             int inIndex = codec.dequeueInputBuffer(8000);
             if (inIndex >= 0) {
-                ByteBuffer buf = codec.getInputBuffer(inIndex);
+                ByteBuffer buf;
+                if (Build.VERSION.SDK_INT >= 21) {
+                    buf = codec.getInputBuffer(inIndex);
+                } else {
+                    buf = codec.getInputBuffers()[inIndex];   // API19 path
+                }
                 if (buf != null) {
                     buf.clear();
                     buf.put(data);
