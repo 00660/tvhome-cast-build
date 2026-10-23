@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(airplay_jni C)
 set(OPENSSL_DIR ${CMAKE_SOURCE_DIR}/openssl/${ANDROID_ABI})
+set(FFMPEG_DIR ${CMAKE_SOURCE_DIR}/ffmpeg/${ANDROID_ABI})
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wno-error -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
@@ -54,7 +55,7 @@ target_compile_definitions(airplay PUBLIC
 target_link_libraries(airplay PUBLIC plist playfair dnssd llhttp)
 
 # ---------- JNI bridge (final shared lib) ----------
-add_library(airplay_jni SHARED airplay_jni.c)
+add_library(airplay_jni SHARED airplay_jni.c ap_player.c)
 message(STATUS "OPENSSL_DIR = ${OPENSSL_DIR}")
 file(GLOB CRYPTO_LIB ${OPENSSL_DIR}/lib/libcrypto.a)
 file(GLOB SSL_LIB ${OPENSSL_DIR}/lib/libssl.a)
@@ -65,8 +66,15 @@ target_include_directories(airplay_jni PRIVATE
     ${CMAKE_SOURCE_DIR}/uxplay-lib/playfair
     ${CMAKE_SOURCE_DIR}/uxplay-lib/llhttp
     ${CMAKE_SOURCE_DIR}/libplist/include
-    ${OPENSSL_DIR}/include)
+    ${OPENSSL_DIR}/include
+    ${FFMPEG_DIR}/include)
+file(GLOB AVFORMAT ${FFMPEG_DIR}/lib/libavformat.a)
+file(GLOB AVCODEC ${FFMPEG_DIR}/lib/libavcodec.a)
+file(GLOB AVUTIL ${FFMPEG_DIR}/lib/libavutil.a)
+file(GLOB SWSCALE ${FFMPEG_DIR}/lib/libswscale.a)
 target_link_libraries(airplay_jni
     airplay plist playfair dnssd llhttp
     ${CRYPTO_LIB} ${SSL_LIB}
+    ${AVFORMAT} ${AVCODEC} ${SWSCALE} ${AVUTIL}
+    z
     log android)
