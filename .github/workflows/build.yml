@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -64,7 +64,7 @@ jobs:
             --cxx=$TOOLCHAIN/bin/${CROSS}${API}-clang++ --ar=$TOOLCHAIN/bin/llvm-ar \
             --nm=$TOOLCHAIN/bin/llvm-nm --strip=$TOOLCHAIN/bin/llvm-strip \
             --enable-static --disable-shared --disable-programs --disable-doc \
-            --disable-avdevice --disable-avfilter --disable-postproc --disable-swresample \
+            --disable-avdevice --disable-avfilter --disable-postproc --enable-swresample \
             --disable-encoders --disable-muxers --disable-bsfs --disable-devices --disable-filters \
             --enable-decoder=h264,hevc,aac,mp3,flv,vp8,vp9,mpeg4,mjpeg \
             --enable-demuxer=mov,flv,mpegts,h264,hevc,aac,mp3,matroska,image2,mpjpeg \
@@ -95,11 +95,3 @@ jobs:
         with:
           name: tvhome-cast-apk
           path: app/build/outputs/apk/release/*.apk
-
-      - name: Publish APK to Release (public, for fast CDN download)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "TV Home + Cast (latest)"
-          files: app/build/outputs/apk/release/*.apk
-          fail_on_unmatched_files: true

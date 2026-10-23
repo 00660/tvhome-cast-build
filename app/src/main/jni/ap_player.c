@@ -6,9 +6,14 @@
 #include <android/native_window_jni.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/samplefmt.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <android/log.h>
@@ -28,6 +33,30 @@ typedef struct {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static UrlPlayer g_url;
+static JavaVM *g_player_vm;
+static jclass g_player_class;
+static jmethodID g_audio_pcm_method;
+
+static void play_audio(const uint8_t *pcm, int size, int sample_rate, int channels) {
+    if (!g_player_vm || !g_player_class || !g_audio_pcm_method || !pcm || size <= 0) return;
+    JNIEnv *env = NULL;
+    int attached = 0;
+    if ((*g_player_vm)->GetEnv(g_player_vm, (void **)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if ((*g_player_vm)->AttachCurrentThread(g_player_vm, &env, NULL) != 0) return;
+        attached = 1;
+    }
+    jbyteArray data = (*env)->NewByteArray(env, size);
+    if (data) {
+        (*env)->SetByteArrayRegion(env, data, 0, size, (const jbyte *)pcm);
+        (*env)->CallStaticVoidMethod(env, g_player_class, g_audio_pcm_method, data, sample_rate, channels);
+        (*env)->DeleteLocalRef(env, data);
+    }
+    if ((*env)->ExceptionCheck(env)) {
+        LOGE("Java PCM output callback failed");
+        (*env)->ExceptionClear(env);
+    }
+    if (attached) (*g_player_vm)->DetachCurrentThread(g_player_vm);
+}
 
 // ---- raw H.264/HEVC playback (AirPlay) ----
 typedef struct {
@@ -85,10 +114,17 @@ static void *url_thread(void *arg) {
     UrlPlayer *p = (UrlPlayer*)arg;
     AVFormatContext *fmt = NULL;
     AVCodecContext *dec = NULL;
+    AVCodecContext *audio_dec = NULL;
     struct SwsContext *sws = NULL;
+    SwrContext *swr = NULL;
     AVFrame *frame = av_frame_alloc();
+    AVFrame *audio_frame = av_frame_alloc();
     AVPacket *pkt = av_packet_alloc();
     int vstream = -1;
+    int astream = -1;
+    int audio_rate = 44100;
+    int input_audio_rate = 44100;
+    int audio_channels = 2;
     if (avformat_open_input(&fmt, p->url, NULL, NULL) != 0) { LOGE("open_input failed: %s", p->url); goto done; }
     if (avformat_find_stream_info(fmt, NULL) < 0) { LOGE("find_stream_info failed"); goto done; }
     vstream = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
@@ -101,6 +137,46 @@ static void *url_thread(void *arg) {
         dec->thread_count = 4;
         if (avcodec_open2(dec, codec, NULL) < 0) { LOGE("open2 failed"); goto done; }
     }
+    astream = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, vstream, NULL, 0);
+    if (astream >= 0) {
+        const AVCodec *codec = avcodec_find_decoder(fmt->streams[astream]->codecpar->codec_id);
+        if (codec) {
+            audio_dec = avcodec_alloc_context3(codec);
+            if (audio_dec && avcodec_parameters_to_context(audio_dec, fmt->streams[astream]->codecpar) >= 0
+                    && avcodec_open2(audio_dec, codec, NULL) >= 0) {
+                input_audio_rate = audio_dec->sample_rate > 0 ? audio_dec->sample_rate : 44100;
+                audio_rate = 44100;
+                AVChannelLayout in_layout = {0};
+                AVChannelLayout out_layout = {0};
+                if (audio_dec->ch_layout.nb_channels > 0) {
+                    av_channel_layout_copy(&in_layout, &audio_dec->ch_layout);
+                } else {
+                    av_channel_layout_default(&in_layout, 2);
+                }
+                audio_channels = in_layout.nb_channels == 1 ? 1 : 2;
+                av_channel_layout_default(&out_layout, audio_channels);
+                int resample_status = swr_alloc_set_opts2(&swr, &out_layout, AV_SAMPLE_FMT_S16,
+                        audio_rate, &in_layout, audio_dec->sample_fmt, input_audio_rate, 0, NULL);
+                av_channel_layout_uninit(&in_layout);
+                av_channel_layout_uninit(&out_layout);
+                if (resample_status < 0 || !swr || swr_init(swr) < 0) {
+                    LOGE("audio resampler init failed");
+                    swr_free(&swr);
+                    avcodec_free_context(&audio_dec);
+                    astream = -1;
+                } else {
+                    LOGI("DLNA audio decoder started: %d Hz, %d output channels", audio_rate, audio_channels);
+                }
+            } else {
+                LOGE("audio decoder init failed");
+                avcodec_free_context(&audio_dec);
+                astream = -1;
+            }
+        } else {
+            LOGE("no audio decoder for stream");
+            astream = -1;
+        }
+    }
     LOGI("DLNA ffmpeg playing: %s", p->url);
     while (p->running && av_read_frame(fmt, pkt) >= 0) {
         if (pkt->stream_index == vstream) {
@@ -110,14 +186,36 @@ static void *url_thread(void *arg) {
                     av_frame_unref(frame);
                 }
             }
+        } else if (pkt->stream_index == astream && audio_dec && swr) {
+            if (avcodec_send_packet(audio_dec, pkt) >= 0) {
+                while (avcodec_receive_frame(audio_dec, audio_frame) == 0) {
+                    int out_samples = swr_get_out_samples(swr, audio_frame->nb_samples);
+                    uint8_t *pcm = NULL;
+                    int pcm_line_size = 0;
+                    if (out_samples > 0 && av_samples_alloc(&pcm, &pcm_line_size, audio_channels,
+                            out_samples, AV_SAMPLE_FMT_S16, 1) >= 0) {
+                        uint8_t *out_planes[] = { pcm };
+                        int converted = swr_convert(swr, out_planes, out_samples,
+                                (const uint8_t **)audio_frame->extended_data, audio_frame->nb_samples);
+                        if (converted > 0) {
+                            play_audio(pcm, converted * audio_channels * (int)sizeof(int16_t), audio_rate, audio_channels);
+                        }
+                        av_freep(&pcm);
+                    }
+                    av_frame_unref(audio_frame);
+                }
+            }
         }
         av_packet_unref(pkt);
     }
 done:
     if (sws) sws_freeContext(sws);
+    swr_free(&swr);
+    if (audio_dec) avcodec_free_context(&audio_dec);
     if (dec) avcodec_free_context(&dec);
     if (fmt) avformat_close_input(&fmt);
     av_frame_free(&frame);
+    av_frame_free(&audio_frame);
     av_packet_free(&pkt);
     LOGI("DLNA ffmpeg stopped");
     return NULL;
@@ -126,6 +224,17 @@ done:
 JNIEXPORT jboolean JNICALL
 Java_com_gathin_tvhome_NativePlayer_nativePlayUrl(JNIEnv *env, jclass c, jstring jurl, jobject surface, jint rotate) {
     pthread_mutex_lock(&g_lock);
+    if (!g_player_vm) (*env)->GetJavaVM(env, &g_player_vm);
+    if (!g_player_class) {
+        g_player_class = (*env)->NewGlobalRef(env, c);
+        if (g_player_class) g_audio_pcm_method = (*env)->GetStaticMethodID(env, c, "onAudioPcm", "([BII)V");
+    }
+    if (!g_player_class || !g_audio_pcm_method) {
+        LOGE("NativePlayer.onAudioPcm callback not found");
+        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+        pthread_mutex_unlock(&g_lock);
+        return JNI_FALSE;
+    }
     if (g_url.running) { g_url.running = 0; pthread_join(g_url.thread, NULL); }
     if (g_url.window) { ANativeWindow_release(g_url.window); g_url.window = NULL; }
     const char *u = (*env)->GetStringUTFChars(env, jurl, NULL);

@@ -75,10 +75,11 @@ final class HapPairSetup {
             byte[] A = Tlv8.find(in, Tlv8.PUBLIC_KEY);
             byte[] proof = Tlv8.find(in, Tlv8.PROOF);
             BigInteger Aint = new BigInteger(1, A);
-            BigInteger S = srp.calculateSecret(Aint);          // premaster secret
+            srp.calculateSecret(Aint);                          // premaster secret
             if (!srp.verifyClientEvidenceMessage(new BigInteger(1, proof))) return error();
             BigInteger M2 = srp.calculateServerEvidenceMessage();
-            sessionKey = toFixed(S, 384);                       // HAP uses S for HKDF (3072-bit group)
+            BigInteger K = srp.calculateSessionKey();           // HAP HKDF input is the SRP session key K = H(S)
+            sessionKey = toFixed(K, 64);                        // SHA-512 output is 64 bytes
             return HapCrypto.concat(
                     Tlv8.encode(Tlv8.STATE, new byte[]{4}),
                     Tlv8.encode(Tlv8.PROOF, toLen(M2, 64)));
@@ -88,19 +89,19 @@ final class HapPairSetup {
     private byte[] m6(List<Tlv8.Tlv> in) {
         try {
             byte[] enc = Tlv8.find(in, Tlv8.ENCRYPTED_DATA);
-            byte[] key = HapCrypto.hkdf(sessionKey, SALT_ENC, INFO_ENC, 32);
+            byte[] key = HapCrypto.hkdf(SALT_ENC, sessionKey, INFO_ENC, 32);
             byte[] plain = decrypt(key, NONCE_05, enc);
             if (plain == null) return error();
             List<Tlv8.Tlv> pt = Tlv8.decode(plain);
             byte[] controllerId = Tlv8.find(pt, Tlv8.IDENTIFIER);
             byte[] controllerLtpk = Tlv8.find(pt, Tlv8.PUBLIC_KEY);
-            byte[] controllerSig = Tlv8.find(pt, Tlv8.PROOF);   // controller signature is in PROOF (0x04)
+            byte[] controllerSig = Tlv8.find(pt, Tlv8.SIGNATURE);
             if (controllerId == null || controllerLtpk == null || controllerSig == null) return error();
 
             // Verify controller signature per HAP:
-            //   iOSDeviceX = HKDF(S, "Pair-Setup-Controller-Sign-Salt", "Pair-Setup-Controller-Sign-Info", 32)
+            //   iOSDeviceX = HKDF(K, "Pair-Setup-Controller-Sign-Salt", "Pair-Setup-Controller-Sign-Info", 32)
             //   signed = iOSDeviceX || iOSDevicePairingID || iOSDeviceLTPK
-            byte[] iox = HapCrypto.hkdf(sessionKey, "Pair-Setup-Controller-Sign-Salt".getBytes(),
+            byte[] iox = HapCrypto.hkdf("Pair-Setup-Controller-Sign-Salt".getBytes(), sessionKey,
                     "Pair-Setup-Controller-Sign-Info".getBytes(), 32);
             byte[] cSigData = HapCrypto.concat(iox, controllerId, controllerLtpk);
             if (!Ed25519.verify(controllerLtpk, cSigData, controllerSig)) return error();
@@ -109,11 +110,11 @@ final class HapPairSetup {
             store.saveController(new String(controllerId), controllerLtpk);
 
             // Build M6 accessory signature:
-            //   AccessoryX = HKDF(S, "Pair-Setup-Accessory-Sign-Salt", "Pair-Setup-Accessory-Sign-Info", 32)
+            //   AccessoryX = HKDF(K, "Pair-Setup-Accessory-Sign-Salt", "Pair-Setup-Accessory-Sign-Info", 32)
             //   signed = AccessoryX || AccessoryPairingID || AccessoryLTPK
             String accId = store.accessoryPairingId();
             byte[] accLtpk = store.controllerLtpkPublic();
-            byte[] accX = HapCrypto.hkdf(sessionKey, "Pair-Setup-Accessory-Sign-Salt".getBytes(),
+            byte[] accX = HapCrypto.hkdf("Pair-Setup-Accessory-Sign-Salt".getBytes(), sessionKey,
                     "Pair-Setup-Accessory-Sign-Info".getBytes(), 32);
             byte[] accSigData = HapCrypto.concat(accX, accId.getBytes(), accLtpk);
             byte[] accSig = store.accessoryEd25519Sign(accSigData);

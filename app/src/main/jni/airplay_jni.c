@@ -182,7 +182,12 @@ Java_com_gathin_tvhome_AirPlayReceiver_nativeStart(JNIEnv *env, jobject thiz,
     m_on_audio = (*env)->GetMethodID(env, cls, "onAudio", "([B)V");
     m_on_conn  = (*env)->GetMethodID(env, cls, "onConnection", "(Z)V");
     m_on_mirror= (*env)->GetMethodID(env, cls, "onMirrorRunning", "(Z)V");
-    if (!m_on_video || !m_on_audio || !m_on_conn) { LOGE("method lookup failed"); return JNI_FALSE; }
+    if (!m_on_video || !m_on_audio || !m_on_conn) {
+        LOGE("method lookup failed");
+        (*env)->DeleteGlobalRef(env, g_obj); g_obj = NULL;
+        m_on_video = m_on_audio = m_on_conn = m_on_mirror = NULL;
+        return JNI_FALSE;
+    }
 
     const char *name = (*env)->GetStringUTFChars(env, jName, NULL);
     const char *mac  = (*env)->GetStringUTFChars(env, jMac, NULL);
@@ -214,11 +219,18 @@ Java_com_gathin_tvhome_AirPlayReceiver_nativeStart(JNIEnv *env, jobject thiz,
     g_dnssd = dnssd_init(name, strlen(name), (const char *) hw, 6, 0, &dnssd_error);
     if (g_dnssd) {
         raop_set_dnssd(g_raop, g_dnssd);
-        dnssd_register_raop(g_dnssd, raop_port);
-        dnssd_register_airplay(g_dnssd, raop_port);
+        if (dnssd_register_raop(g_dnssd, raop_port) != 0) {
+            LOGE("dnssd_register_raop failed");
+            goto fail;
+        }
+        if (dnssd_register_airplay(g_dnssd, raop_port) != 0) {
+            LOGE("dnssd_register_airplay failed");
+            goto fail;
+        }
         LOGI("dnssd registered as '%s'", name);
     } else {
         LOGE("dnssd_init failed err=%d", dnssd_error);
+        goto fail;
     }
 
     g_running = 1;
@@ -232,13 +244,23 @@ fail:
     (*env)->ReleaseStringUTFChars(env, jMac, mac);
     (*env)->ReleaseStringUTFChars(env, jKeyfile, key);
     if (g_raop) { raop_destroy(g_raop); g_raop = NULL; }
+    if (g_dnssd) {
+        dnssd_unregister_raop(g_dnssd);
+        dnssd_unregister_airplay(g_dnssd);
+        dnssd_destroy(g_dnssd);
+        g_dnssd = NULL;
+    }
+    if (g_obj) { (*env)->DeleteGlobalRef(env, g_obj); g_obj = NULL; }
+    m_on_video = m_on_audio = m_on_conn = m_on_mirror = NULL;
+    g_running = 0;
     return JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
 Java_com_gathin_tvhome_AirPlayReceiver_nativeStop(JNIEnv *env, jobject thiz) {
+    /* Stop RAOP first: active RAOP connections can still reference the dnssd_t. */
+    if (g_raop) { raop_destroy(g_raop); g_raop = NULL; }
     if (g_dnssd) { dnssd_unregister_raop(g_dnssd); dnssd_unregister_airplay(g_dnssd); dnssd_destroy(g_dnssd); g_dnssd = NULL; }
-    if (g_raop) { raop_stop_httpd(g_raop); raop_destroy(g_raop); g_raop = NULL; }
     if (g_obj) { (*env)->DeleteGlobalRef(env, g_obj); g_obj = NULL; }
     g_running = 0;
 }

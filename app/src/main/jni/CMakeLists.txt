@@ -72,9 +72,10 @@ file(GLOB AVFORMAT ${FFMPEG_DIR}/lib/libavformat.a)
 file(GLOB AVCODEC ${FFMPEG_DIR}/lib/libavcodec.a)
 file(GLOB AVUTIL ${FFMPEG_DIR}/lib/libavutil.a)
 file(GLOB SWSCALE ${FFMPEG_DIR}/lib/libswscale.a)
+file(GLOB SWRESAMPLE ${FFMPEG_DIR}/lib/libswresample.a)
 target_link_libraries(airplay_jni
     airplay plist playfair dnssd llhttp
-    ${AVFORMAT} ${AVCODEC} ${SWSCALE} ${AVUTIL}
+    ${AVFORMAT} ${AVCODEC} ${SWSCALE} ${SWRESAMPLE} ${AVUTIL}
     ${SSL_LIB} ${CRYPTO_LIB}
-    z
+    z m
     log android)

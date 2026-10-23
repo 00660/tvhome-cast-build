@@ -21,6 +21,8 @@ final class HomeKitManager {
     private HapAdvertiser advertiser;
     private TvAccessory accessory;
     private boolean running;
+    private boolean starting;
+    private long generation;
 
     static synchronized HomeKitManager get() {
         if (instance == null) instance = new HomeKitManager();
@@ -34,22 +36,50 @@ final class HomeKitManager {
     synchronized boolean isRunning() { return running; }
 
     synchronized void start(final Context ctx, final Runnable onActiveOn, final Runnable onActiveOff) {
-        if (running) return;
+        if (running || starting) return;
+        starting = true;
+        final long startGeneration = ++generation;
+        final Context appContext = ctx.getApplicationContext();
         new Thread(() -> {
+            TvAccessory nextAccessory = null;
+            HapServer nextServer = null;
+            HapAdvertiser nextAdvertiser = null;
+            boolean installed = false;
             try {
-                accessory = new TvAccessory(onActiveOn, onActiveOff, key -> {
+                nextAccessory = new TvAccessory(onActiveOn, onActiveOff, key -> {
                     int kc = mapRemoteKey(key);
-                    if (kc != 0) RemoteKeys.sendKey(ctx.getApplicationContext(), kc);
+                    if (kc != 0) RemoteKeys.sendKey(appContext, kc);
                 });
-                server = new HapServer(ctx.getApplicationContext(), accessory, PORT);
-                server.start();
-                advertiser = new HapAdvertiser();
-                advertiser.start(ctx.getApplicationContext(), "电视投屏", server.accessoryId(), PORT, 1);
-                running = true;
-                Log.i(TAG, "HomeKit HAP started on " + PORT + ", pin=" + getPinText() + ", advertised");
+                nextServer = new HapServer(appContext, nextAccessory, PORT);
+                nextServer.start();
+                nextAdvertiser = new HapAdvertiser();
+                if (!nextAdvertiser.start(appContext, "电视投屏", nextServer.accessoryId(), PORT, 1)) {
+                    throw new IllegalStateException("HomeKit mDNS advertisement failed");
+                }
+                synchronized (HomeKitManager.this) {
+                    if (startGeneration == generation) {
+                        accessory = nextAccessory;
+                        server = nextServer;
+                        advertiser = nextAdvertiser;
+                        running = true;
+                        starting = false;
+                        installed = true;
+                    }
+                }
+                if (installed) Log.i(TAG, "HomeKit HAP started on " + PORT + ", pin=" + getPinText() + ", advertised");
             } catch (Throwable t) {
                 Log.e(TAG, "HomeKit start failed", t);
-                running = false;
+            } finally {
+                if (!installed) {
+                    try { if (nextAdvertiser != null) nextAdvertiser.stop(); } catch (Throwable ignored) { }
+                    try { if (nextServer != null) nextServer.stop(); } catch (Throwable ignored) { }
+                    synchronized (HomeKitManager.this) {
+                        if (startGeneration == generation) {
+                            starting = false;
+                            running = false;
+                        }
+                    }
+                }
             }
         }, "homekit-start").start();
     }
@@ -74,8 +104,10 @@ final class HomeKitManager {
     }
 
     synchronized void stop() {
+        ++generation;
+        starting = false;
         try { if (advertiser != null) advertiser.stop(); } catch (Throwable ignored) { }
         try { if (server != null) server.stop(); } catch (Throwable ignored) { }
-        server = null; running = false;
+        server = null; advertiser = null; accessory = null; running = false;
     }
 }

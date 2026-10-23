@@ -19,8 +19,10 @@ public final class TvAccessory implements HapServer.Accessory {
     private final Runnable onDeactivate;
     private final RemoteSink remoteSink;
 
+    private static final int IID_SERVICE_INFORMATION = 1, IID_SERVICE_TELEVISION = 18;
+    private static final int IID_SERVICE_SPEAKER = 19, IID_SERVICE_INPUT_SOURCE = 20;
     private volatile int active = 0;
-    private volatile int activeIdentifier = 1;   // input source iid handled below
+    private volatile int activeIdentifier = IID_SERVICE_INPUT_SOURCE;
 
     // iids
     private static final int IID_INFO_NAME = 2, IID_INFO_MFR = 3, IID_INFO_MODEL = 4, IID_INFO_SERIAL = 5, IID_INFO_FW = 6;
@@ -40,7 +42,7 @@ public final class TvAccessory implements HapServer.Accessory {
             JSONArray services = new JSONArray();
 
             // AccessoryInformation (3E)
-            JSONObject info = svc(1, "3E");
+            JSONObject info = svc(IID_SERVICE_INFORMATION, "3E");
             JSONArray ic = new JSONArray();
             ic.put(chr(IID_INFO_NAME, "23", "Name", "string", "pr", "电视投屏"));
             ic.put(chr(IID_INFO_MFR, "20", "Manufacturer", "string", "pr", "gathin"));
@@ -51,7 +53,7 @@ public final class TvAccessory implements HapServer.Accessory {
             services.put(info);
 
             // Television (D8): Active, ActiveIdentifier, ConfiguredName, RemoteKey, SleepDiscoveryMode
-            JSONObject tv = svc(2, "D8");
+            JSONObject tv = svc(IID_SERVICE_TELEVISION, "D8");
             JSONArray tc = new JSONArray();
             tc.put(chrPerm(IID_TV_ACTIVE, "B0", "Active", "uint8", "prpw", active, 0, 1));
             tc.put(chrPerm(IID_TV_ACTIVE_ID, "E7", "ActiveIdentifier", "uint32", "prpw", activeIdentifier));
@@ -60,17 +62,22 @@ public final class TvAccessory implements HapServer.Accessory {
             tc.put(rk);
             tc.put(chrPerm(IID_TV_SLEEP, "E8", "SleepDiscoveryMode", "uint8", "pr", 1, 0, 1));
             tv.put("characteristics", tc);
+            JSONArray linked = new JSONArray();
+            linked.put(IID_SERVICE_SPEAKER);
+            linked.put(IID_SERVICE_INPUT_SOURCE);
+            tv.put("linked", linked);
+            tv.put("primary", true);
             services.put(tv);
 
             // TelevisionSpeaker (113): Mute
-            JSONObject spk = svc(3, "113");
+            JSONObject spk = svc(IID_SERVICE_SPEAKER, "113");
             JSONArray sc = new JSONArray();
             sc.put(chrPerm(IID_SPK_MUTE, "11A", "Mute", "bool", "prpw", false));
             spk.put("characteristics", sc);
             services.put(spk);
 
             // InputSource (D9): ConfiguredName, InputSourceType, IsConfigured, Name, CurrentVisibilityState
-            JSONObject in = svc(4, "D9");
+            JSONObject in = svc(IID_SERVICE_INPUT_SOURCE, "D9");
             JSONArray inc = new JSONArray();
             inc.put(chrPerm(IID_IN_CONFIGURED_NAME, "E3", "ConfiguredName", "string", "prpw", "AirPlay"));
             inc.put(chrPerm(IID_IN_TYPE, "DB", "InputSourceType", "uint8", "pr", 8));  // 8 = AIRPLAY
