@@ -24,7 +24,7 @@ public final class HapAdvertiser {
     private ServiceInfo info;
     private WifiManager.MulticastLock lock;
 
-    public void start(Context ctx, String accessoryName, String accessoryId, int port, int configNum) {
+    public boolean start(Context ctx, String accessoryName, String accessoryId, int port, int configNum) {
         try {
             WifiManager wifi = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if (wifi != null) { lock = wifi.createMulticastLock("hap-mdns"); lock.setReferenceCounted(false); lock.acquire(); }
@@ -44,8 +44,10 @@ public final class HapAdvertiser {
             info = ServiceInfo.create(SERVICE, accessoryName, port, 0, 0, true, txt);
             jmdns.registerService(info);
             Log.i(TAG, "advertised _hap._tcp '" + accessoryName + "' on " + addr + ":" + port + " id=" + accessoryId);
+            return true;
         } catch (Throwable t) {
             Log.e(TAG, "advertise failed", t);
+            return false;
         }
     }
 
