@@ -40,6 +40,8 @@ public final class HapServer {
         this.port = port;
     }
 
+    public String accessoryId() { return keys.accessoryId(); }
+
     public void start() {
         if (running) return;
         running = true;
