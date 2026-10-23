@@ -59,7 +59,6 @@ dependencies {
     implementation files('libs/core-3.5.3.jar')
     // libVLC (FFmpeg-based): software-decodes HD FLV/HLS/MP4 that this TV's hardware codec cannot
     // handle. Supports Android 4.4 (API17+). This is what lets high-bitrate cast streams play.
-    implementation 'org.videolan.android:libvlc-all:3.6.2'
     // HomeKit Accessory Protocol implemented from spec (com.gathin.tvhome.hk) using BouncyCastle
     // primitives: SRP6a, X25519, Ed25519, ChaCha20-Poly1305, HKDF. All available in bcprov 1.70.
     implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
