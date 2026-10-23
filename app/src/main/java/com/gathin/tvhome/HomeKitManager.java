@@ -37,7 +37,10 @@ final class HomeKitManager {
         if (running) return;
         new Thread(() -> {
             try {
-                accessory = new TvAccessory(onActiveOn, onActiveOff);
+                accessory = new TvAccessory(onActiveOn, onActiveOff, key -> {
+                    int kc = mapRemoteKey(key);
+                    if (kc != 0) RemoteKeys.sendKey(ctx.getApplicationContext(), kc);
+                });
                 server = new HapServer(ctx.getApplicationContext(), accessory, PORT);
                 server.start();
                 advertiser = new HapAdvertiser();
