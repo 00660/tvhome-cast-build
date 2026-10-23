@@ -42,7 +42,8 @@
         android:banner="@drawable/banner"
         android:theme="@style/Theme.TvHome"
         android:allowBackup="false"
-        android:largeHeap="true">
+        android:largeHeap="true"
+        android:name="androidx.multidex.MultiDexApplication">
 
         <activity
             android:name=".MainActivity"
