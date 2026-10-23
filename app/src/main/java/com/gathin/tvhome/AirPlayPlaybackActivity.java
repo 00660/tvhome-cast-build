@@ -3,31 +3,30 @@ package com.gathin.tvhome;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.widget.FrameLayout;
 
-import org.videolan.libvlc.util.VLCVideoLayout;
-
-/**
- * Auto-shown full-screen surface for AirPlay mirroring. Video is decoded by libVLC (FFmpeg) into a
- * VLCVideoLayout (see AirPlayReceiver/AirPlayVideoSink). Auto-launched on connect; closes on disconnect.
- */
-public final class AirPlayPlaybackActivity extends Activity implements AirPlayReceiver.Listener {
-    private VLCVideoLayout videoLayout;
+/** Auto-shown full-screen AirPlay mirror surface. Native FFmpeg soft-decodes the H.264/HEVC from the
+ *  UxPlay engine straight onto a SurfaceView (see AirPlayReceiver/NativePlayer). No overlay text. */
+public final class AirPlayPlaybackActivity extends Activity implements AirPlayReceiver.Listener, SurfaceHolder.Callback {
+    private SurfaceView surfaceView;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF000000);
-        videoLayout = new VLCVideoLayout(this);
-        root.addView(videoLayout, new FrameLayout.LayoutParams(-1, -1));
+        surfaceView = new SurfaceView(this);
+        surfaceView.getHolder().addCallback(this);
+        root.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
-
         AirPlayReceiver.get().setListener(this);
-        AirPlayReceiver.get().setVideoLayout(videoLayout);
     }
-
+    @Override public void surfaceCreated(SurfaceHolder h){ AirPlayReceiver.get().setSurfaceView(this, surfaceView); }
+    @Override public void surfaceChanged(SurfaceHolder h,int f,int w,int ht){ AirPlayReceiver.get().setSurfaceView(this, surfaceView); }
+    @Override public void surfaceDestroyed(SurfaceHolder h){ AirPlayReceiver.get().clearSurface(); }
     @Override public void onConnected() { }
     @Override public void onDisconnected() { runOnUiThread(this::finish); }
-    @Override protected void onDestroy() { AirPlayReceiver.get().clearVideoLayout(); super.onDestroy(); }
+    @Override protected void onDestroy() { AirPlayReceiver.get().clearSurface(); super.onDestroy(); }
     @Override public void onBackPressed() { finish(); }
 }
