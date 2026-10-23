@@ -5,16 +5,16 @@ import android.content.Intent;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.util.Log;
-
-import org.videolan.libvlc.util.VLCVideoLayout;
+import android.view.Surface;
+import android.view.SurfaceView;
 
 import java.nio.ByteBuffer;
 
 /**
  * AirPlay mirror receiver. UxPlay (bundled C, GPL) handles the AirPlay protocol and hands us bare
- * H.264 Annex-B video + AAC audio. Video is decoded by libVLC's FFmpeg (software) via AirPlayVideoSink
- * (in-process pipe, no TCP, reusing the libVLC already bundled for DLNA); audio by MediaCodec.
- * Standalone: Settings/Boot switch starts it; the mirror Activity is auto-shown on connect.
+ * H.264 Annex-B video (SPS/PPS already prepended) + AAC audio. Video is decoded by the TV's hardware
+ * MediaCodec straight onto a SurfaceView (standard Android mirroring path — no pipe, no TCP, no
+ * libVLC). Audio by MediaCodec. Works on Android 4.4 (MediaCodec is API16+, uses buffer-array API).
  */
 public final class AirPlayReceiver {
     static { try { System.loadLibrary("airplay_jni"); } catch (Throwable t) { Log.e("AirPlay", "lib load failed", t); } }
@@ -24,8 +24,7 @@ public final class AirPlayReceiver {
 
     private Context app;
     private volatile boolean started;
-    private AirPlayVideoSink videoSink;
-    private VLCVideoLayout layout;
+    private volatile boolean rotate = true;
     private MediaCodec audioCodec;
     private android.net.wifi.WifiManager.MulticastLock multicastLock;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -41,15 +40,13 @@ public final class AirPlayReceiver {
 
     public boolean isStarted() { return started; }
 
-    public void setVideoLayout(VLCVideoLayout l) {
-        this.layout = l;
-        if (videoSink == null && app != null) videoSink = new AirPlayVideoSink(app);
-        if (videoSink != null) videoSink.setLayout(l);
+    /** Called by the mirror Activity with the SurfaceView for the native FFmpeg raw decoder. */
+    public void setSurfaceView(Context ctx, SurfaceView sv) {
+        this.app = ctx.getApplicationContext();
+        NativePlayer.setRawSurface(sv, rotate);
+        Log.i(TAG, "raw surface set");
     }
-    public void clearVideoLayout() {
-        this.layout = null;
-        if (videoSink != null) { videoSink.stop(); videoSink = null; }
-    }
+    public void clearSurface() { NativePlayer.releaseRaw(); }
 
     public boolean start(Context ctx, String name, int width, int height) {
         if (started) return true;
@@ -72,8 +69,7 @@ public final class AirPlayReceiver {
 
     public void stop() {
         try { nativeStop(); } catch (Throwable ignored) { }
-        releaseAudio();
-        if (videoSink != null) { videoSink.stop(); videoSink = null; }
+        NativePlayer.releaseRaw(); releaseAudio();
         try { if (multicastLock != null && multicastLock.isHeld()) multicastLock.release(); } catch (Throwable ignored) { }
         multicastLock = null; started = false;
     }
@@ -81,12 +77,7 @@ public final class AirPlayReceiver {
     // ---- called from native (UxPlay) ----
     private void onVideo(int h265, byte[] data) {
         if (data == null || data.length == 0) return;
-        if (videoSink == null && app != null) { videoSink = new AirPlayVideoSink(app); videoSink.setLayout(layout); }
-        if (videoSink != null) {
-            // start the libVLC pipe player lazily once we know layout is ready and frames arrive
-            if (layout != null) videoSink.start();
-            videoSink.write(data);
-        }
+        NativePlayer.feedRaw(h265 != 0, data);   // native FFmpeg soft-decode → ANativeWindow
     }
 
     private void onAudio(byte[] data) {
@@ -118,11 +109,13 @@ public final class AirPlayReceiver {
             });
             if (l != null) l.onConnected();
         } else {
-            releaseAudio();
+            NativePlayer.releaseRaw(); releaseAudio();
             if (l != null) l.onDisconnected();
         }
     }
     private void onMirrorRunning(boolean running) { Log.i(TAG, "mirror running " + running); }
+
+
 
     private synchronized void initAudio() {
         try {
