@@ -94,16 +94,28 @@ final class HapPairSetup {
             List<Tlv8.Tlv> pt = Tlv8.decode(plain);
             byte[] controllerId = Tlv8.find(pt, Tlv8.IDENTIFIER);
             byte[] controllerLtpk = Tlv8.find(pt, Tlv8.PUBLIC_KEY);
-            byte[] controllerSig = Tlv8.find(pt, Tlv8.SIGNATURE);
-            String accId = store.accessoryPairingId();
-            byte[] accLtpk = store.controllerLtpkPublic();   // accessory long-term public key
-            // Verify controller signature: controllerLtpk || controllerId || accLtpk || accId
-            byte[] sigData = HapCrypto.concat(controllerLtpk, controllerId, accLtpk, accId.getBytes());
-            if (!Ed25519.verify(controllerLtpk, sigData, controllerSig)) return error();
+            byte[] controllerSig = Tlv8.find(pt, Tlv8.PROOF);   // controller signature is in PROOF (0x04)
+            if (controllerId == null || controllerLtpk == null || controllerSig == null) return error();
+
+            // Verify controller signature per HAP:
+            //   iOSDeviceX = HKDF(S, "Pair-Setup-Controller-Sign-Salt", "Pair-Setup-Controller-Sign-Info", 32)
+            //   signed = iOSDeviceX || iOSDevicePairingID || iOSDeviceLTPK
+            byte[] iox = HapCrypto.hkdf(sessionKey, "Pair-Setup-Controller-Sign-Salt".getBytes(),
+                    "Pair-Setup-Controller-Sign-Info".getBytes(), 32);
+            byte[] cSigData = HapCrypto.concat(iox, controllerId, controllerLtpk);
+            if (!Ed25519.verify(controllerLtpk, cSigData, controllerSig)) return error();
+
             // Store paired controller
             store.saveController(new String(controllerId), controllerLtpk);
-            // Build M6: accessory identifier + ltpk + signature(accLtpk||accId||controllerLtpk||controllerId)
-            byte[] accSigData = HapCrypto.concat(accLtpk, accId.getBytes(), controllerLtpk, controllerId);
+
+            // Build M6 accessory signature:
+            //   AccessoryX = HKDF(S, "Pair-Setup-Accessory-Sign-Salt", "Pair-Setup-Accessory-Sign-Info", 32)
+            //   signed = AccessoryX || AccessoryPairingID || AccessoryLTPK
+            String accId = store.accessoryPairingId();
+            byte[] accLtpk = store.controllerLtpkPublic();
+            byte[] accX = HapCrypto.hkdf(sessionKey, "Pair-Setup-Accessory-Sign-Salt".getBytes(),
+                    "Pair-Setup-Accessory-Sign-Info".getBytes(), 32);
+            byte[] accSigData = HapCrypto.concat(accX, accId.getBytes(), accLtpk);
             byte[] accSig = store.accessoryEd25519Sign(accSigData);
             byte[] outPlain = HapCrypto.concat(
                     Tlv8.encode(Tlv8.IDENTIFIER, accId.getBytes()),
