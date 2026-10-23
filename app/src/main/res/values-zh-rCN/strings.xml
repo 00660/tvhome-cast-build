@@ -107,4 +107,9 @@
     <string name="homekit_entry">HomeKit 配件（家庭 App 遥控）</string>
     <string name="homekit_section">智能家居</string>
     <string name="homekit_pin_hint">HomeKit 配对码：123-44-321（在“家庭”App 里添加配件，输入此码）</string>
+    <string name="airplay_switch">AirPlay 投屏</string>
+    <string name="homekit_switch">HomeKit 配件（家庭 App 遥控）</string>
+    <string name="homekit_pin_line">HomeKit 配对码：%1$s（家庭 App 添加配件时输入）</string>
+    <string name="homekit_remote_channel">遥控通道</string>
+    <string name="boot_start">开机自启</string>
 </resources>
