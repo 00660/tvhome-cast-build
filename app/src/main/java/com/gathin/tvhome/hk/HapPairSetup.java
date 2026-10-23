@@ -75,10 +75,10 @@ final class HapPairSetup {
             byte[] A = Tlv8.find(in, Tlv8.PUBLIC_KEY);
             byte[] proof = Tlv8.find(in, Tlv8.PROOF);
             BigInteger Aint = new BigInteger(1, A);
-            srp.calculateSecret(Aint);
+            BigInteger S = srp.calculateSecret(Aint);          // premaster secret
             if (!srp.verifyClientEvidenceMessage(new BigInteger(1, proof))) return error();
             BigInteger M2 = srp.calculateServerEvidenceMessage();
-            sessionKey = toFixed(srp.calculateSessionKey(), 64);
+            sessionKey = toFixed(S, 384);                       // HAP uses S for HKDF (3072-bit group)
             return HapCrypto.concat(
                     Tlv8.encode(Tlv8.STATE, new byte[]{4}),
                     Tlv8.encode(Tlv8.PROOF, toLen(M2, 64)));
