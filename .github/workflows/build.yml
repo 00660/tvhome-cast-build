@@ -46,6 +46,38 @@ jobs:
           make install_sw >/dev/null 2>&1
           echo "openssl installed (API19):"; ls -la $PREFIX/lib
 
+      - name: Build FFmpeg for armeabi-v7a (API19, soft decode)
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE"
+          curl -sSL -o ffmpeg.tar.gz https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n6.1.tar.gz
+          tar xzf ffmpeg.tar.gz
+          cd FFmpeg-n6.1
+          export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+          API=19; ARCH=arm; CPU=armv7-a; CROSS=armv7a-linux-androideabi
+          TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          PREFIX=$GITHUB_WORKSPACE/app/src/main/jni/ffmpeg/armeabi-v7a
+          OPENSSL=$GITHUB_WORKSPACE/app/src/main/jni/openssl/armeabi-v7a
+          ./configure --prefix=$PREFIX \
+            --target-os=android --arch=$ARCH --cpu=$CPU \
+            --enable-cross-compile --cc=$TOOLCHAIN/bin/${CROSS}${API}-clang \
+            --cxx=$TOOLCHAIN/bin/${CROSS}${API}-clang++ --ar=$TOOLCHAIN/bin/llvm-ar \
+            --nm=$TOOLCHAIN/bin/llvm-nm --strip=$TOOLCHAIN/bin/llvm-strip \
+            --enable-static --disable-shared --disable-programs --disable-doc \
+            --disable-avdevice --disable-avfilter --disable-postproc --disable-swresample \
+            --disable-encoders --disable-muxers --disable-bsfs --disable-devices --disable-filters \
+            --enable-decoder=h264,hevc,aac,mp3,flv,vp8,vp9,mpeg4,mjpeg \
+            --enable-demuxer=mov,flv,mpegts,h264,hevc,aac,mp3,matroska,image2,mpjpeg \
+            --enable-parser=h264,hevc,aac,mpegaudio,flv,vp8,vp9 \
+            --enable-protocol=file,http,tcp,https,pipe \
+            --enable-openssl --disable-symver \
+            --extra-cflags="-I$OPENSSL/include -D__ANDROID_API__=$API" \
+            --extra-ldflags="-L$OPENSSL/lib -D__ANDROID_API__=$API -lcrypto -lssl -lz" \
+            --enable-small >/tmp/ff_conf.log 2>&1 || { echo FFCONF_FAIL; tail -50 /tmp/ff_conf.log; exit 1; }
+          make -j4 >/tmp/ff_make.log 2>&1 || { echo FFMAKE_FAIL; tail -60 /tmp/ff_make.log; exit 1; }
+          make install >/tmp/ff_inst.log 2>&1 || { echo FFINST_FAIL; tail -40 /tmp/ff_inst.log; exit 1; }
+          echo "ffmpeg installed:"; ls -la $PREFIX/lib
+
       - name: Build APK
         run: |
           chmod +x ./gradlew
