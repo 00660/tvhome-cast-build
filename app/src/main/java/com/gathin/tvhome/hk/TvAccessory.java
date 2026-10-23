@@ -14,7 +14,7 @@ import org.json.JSONObject;
 public final class TvAccessory implements HapServer.Accessory {
     private static final String TAG = "TvAccessory";
 
-    interface RemoteSink { void onRemoteKey(int key); }
+    public interface RemoteSink { void onRemoteKey(int key); }
     private final Runnable onActivate;
     private final Runnable onDeactivate;
     private final RemoteSink remoteSink;
