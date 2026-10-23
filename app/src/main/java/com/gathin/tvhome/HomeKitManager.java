@@ -3,28 +3,21 @@ package com.gathin.tvhome;
 import android.content.Context;
 import android.util.Log;
 
-import io.github.hapjava.server.impl.HomekitRoot;
-import io.github.hapjava.server.impl.HomekitServer;
-import io.github.hapjava.server.impl.HomekitStandaloneAccessoryServer;
-
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.util.Collections;
+import com.gathin.tvhome.hk.HapServer;
+import com.gathin.tvhome.hk.TvAccessory;
 
 /**
- * Starts the HomeKit media accessory (a Television) so the iOS "Home" app can pair it and control
- * casting/remote keys over HAP. Pure-Java HAP (hap-java) + BouncyCastle, all 4.4-compatible.
- * Pairing code is the default 123-44-321 unless changed.
+ * Starts the self-written HomeKit accessory (HAP implemented from spec with BouncyCastle) so the iOS
+ * "Home" app can pair and control casting over encrypted HAP. Setup code 123-44-321. API19-safe.
  */
 final class HomeKitManager {
     private static final String TAG = "HomeKit";
     static final String DEFAULT_PIN = "12344321";   // shown as 123-44-321
+    private static final int PORT = 51826;
 
     private static HomeKitManager instance;
-    private HomekitServer server;
-    private HomekitStandaloneAccessoryServer standalone;
-    private HomekitRoot bridge;
-    private HomeKitTvAccessory accessory;
+    private HapServer server;
+    private TvAccessory accessory;
     private boolean running;
 
     static synchronized HomeKitManager get() {
@@ -42,14 +35,11 @@ final class HomeKitManager {
         if (running) return;
         new Thread(() -> {
             try {
-                HomeKitAuthInfoImpl auth = new HomeKitAuthInfoImpl(ctx.getApplicationContext(), DEFAULT_PIN);
-                accessory = new HomeKitTvAccessory(ctx, 1, "电视投屏", onActiveOn, onActiveOff);
-                server = new HomekitServer(
-                        InetAddress.getByName(findLocalIp()), 47128, 47129);
-                standalone = server.createStandaloneAccessory(auth, accessory);
-                standalone.start();
+                accessory = new TvAccessory(onActiveOn, onActiveOff);
+                server = new HapServer(ctx.getApplicationContext(), accessory, PORT);
+                server.start();
                 running = true;
-                Log.i(TAG, "HomeKit server started, pin=" + getPinText());
+                Log.i(TAG, "HomeKit HAP started on " + PORT + ", pin=" + getPinText());
             } catch (Throwable t) {
                 Log.e(TAG, "HomeKit start failed", t);
                 running = false;
@@ -58,22 +48,7 @@ final class HomeKitManager {
     }
 
     synchronized void stop() {
-        try { if (bridge != null) bridge.stop(); } catch (Throwable ignored) { }
         try { if (server != null) server.stop(); } catch (Throwable ignored) { }
-        standalone = null; bridge = null; server = null; running = false;
-    }
-
-    void setActiveFromPlayer(boolean a) { if (accessory != null) accessory.setActiveFromPlayer(a); }
-
-    private static String findLocalIp() {
-        try {
-            for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (!nif.isUp() || nif.isLoopback()) continue;
-                for (InetAddress a : Collections.list(nif.getInetAddresses())) {
-                    if (a instanceof java.net.Inet4Address && a.isSiteLocalAddress()) return a.getHostAddress();
-                }
-            }
-        } catch (Throwable ignored) { }
-        return "127.0.0.1";
+        server = null; running = false;
     }
 }
