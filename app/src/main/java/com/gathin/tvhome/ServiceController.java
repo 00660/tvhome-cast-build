@@ -18,7 +18,7 @@ final class ServiceController {
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
 
     // ---- AirPlay ----
-    static boolean isAirPlayOn(Context c) { return prefs(c).getBoolean(KEY_AIRPLAY, false); }
+    static boolean isAirPlayOn(Context c) { return prefs(c).getBoolean(KEY_AIRPLAY, true); }
     static boolean setAirPlay(Context c, boolean on) {
         prefs(c).edit().putBoolean(KEY_AIRPLAY, on).apply();
         if (on) {
