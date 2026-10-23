@@ -8,6 +8,8 @@ import android.util.Log;
 final class ServiceController {
     private static final String PREFS = "services";
     private static final String KEY_AIRPLAY = "airplay_on";
+    private static final String KEY_DLNA = "dlna_on";
+    private static final String KEY_AIRPLAY_ROTATE = "airplay_rotate";
     private static final String KEY_HOMEKIT = "homekit_on";
     private static final String KEY_BOOT = "boot_start";
 
@@ -26,6 +28,14 @@ final class ServiceController {
             return true;
         }
     }
+
+    // ---- AirPlay rotate portrait mirror 90° (default on) ----
+    static boolean isAirPlayRotate(Context c) { return prefs(c).getBoolean(KEY_AIRPLAY_ROTATE, true); }
+    static void setAirPlayRotate(Context c, boolean on) { prefs(c).edit().putBoolean(KEY_AIRPLAY_ROTATE, on).apply(); }
+
+    // ---- DLNA (default ON so phones discover casting out of the box) ----
+    static boolean isDlnaOn(Context c) { return prefs(c).getBoolean(KEY_DLNA, true); }
+    static void setDlnaOn(Context c, boolean on) { prefs(c).edit().putBoolean(KEY_DLNA, on).apply(); }
 
     // ---- HomeKit ----
     static boolean isHomeKitOn(Context c) { return prefs(c).getBoolean(KEY_HOMEKIT, true); }
