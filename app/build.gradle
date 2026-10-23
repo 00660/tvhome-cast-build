@@ -63,6 +63,7 @@ dependencies {
     // HomeKit Accessory Protocol implemented from spec (com.gathin.tvhome.hk) using BouncyCastle
     // primitives: SRP6a, X25519, Ed25519, ChaCha20-Poly1305, HKDF. All available in bcprov 1.70.
     implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+    implementation 'org.jmdns:jmdns:3.5.12'
     implementation 'dev.mobile:dadb:2.0.0'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
