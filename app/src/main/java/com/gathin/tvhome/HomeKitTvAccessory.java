@@ -25,8 +25,10 @@ final class HomeKitTvAccessory implements TelevisionAccessory {
     private HomekitCharacteristicChangeCallback sleepCb;
     private final Runnable onActiveOn;
     private final Runnable onActiveOff;
+    private final android.content.Context ctx;
 
-    HomeKitTvAccessory(int id, String name, Runnable onActiveOn, Runnable onActiveOff) {
+    HomeKitTvAccessory(android.content.Context ctx, int id, String name, Runnable onActiveOn, Runnable onActiveOff) {
+        this.ctx = ctx.getApplicationContext();
         this.id = id;
         this.name = name;
         this.onActiveOn = onActiveOn;
@@ -82,7 +84,7 @@ final class HomeKitTvAccessory implements TelevisionAccessory {
 
     @Override public CompletableFuture<Void> setRemoteKey(RemoteKeyEnum key) {
         int code = mapKey(key);
-        if (code != 0) RemoteKeys.sendKey(code);
+        if (code != 0) RemoteKeys.sendKey(ctx, code);
         return CompletableFuture.completedFuture(null);
     }
 
