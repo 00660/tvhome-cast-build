@@ -43,7 +43,7 @@ final class HomeKitManager {
         new Thread(() -> {
             try {
                 HomeKitAuthInfoImpl auth = new HomeKitAuthInfoImpl(ctx.getApplicationContext(), DEFAULT_PIN);
-                accessory = new HomeKitTvAccessory(1, "电视投屏", onActiveOn, onActiveOff);
+                accessory = new HomeKitTvAccessory(ctx, 1, "电视投屏", onActiveOn, onActiveOff);
                 server = new HomekitServer(
                         InetAddress.getByName(findLocalIp()), 47128, 47129);
                 standalone = server.createStandaloneAccessory(auth, accessory);
