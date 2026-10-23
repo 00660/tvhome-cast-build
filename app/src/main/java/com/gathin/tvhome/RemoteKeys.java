@@ -6,51 +6,55 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 /**
- * Injects remote-control key events into the TV from the HomeKit accessory. On Android 4.4 a normal
- * app cannot inject keys, so this uses root (`su -c input keyevent N`, the stock `input` tool is
- * present on 4.4). All calls are plain Java + ProcessBuilder — no API21+ APIs.
+ * Injects real remote-control key events into the TV from the HomeKit accessory. On Android 4.4 a
+ * normal app cannot inject keys (INJECT_EVENTS is a system permission), so this runs the stock
+ * `input keyevent N` tool through root (`su -c ...`) — the same mechanism this TV's system uses.
+ * If root is unavailable it falls back to `input` directly (works on some firmwares / debuggable
+ * builds). Pure Java + ProcessBuilder, no API21+ APIs.
  */
 final class RemoteKeys {
     private static final String TAG = "RemoteKeys";
-    private static volatile boolean rootChecked = false;
-    private static volatile boolean rootOk = false;
+    private static volatile int rootState = 0; // 0 unknown, 1 ok, -1 unavailable
 
     private RemoteKeys() { }
 
-    /** Whether root (su) is usable to inject keys. */
-    static boolean hasRoot() {
-        if (!rootChecked) {
-            rootChecked = true;
-            rootOk = run("su -c id") != null && true;
+    /** True if root works (cached). Runs `su -c id` once. */
+    static synchronized boolean hasRoot() {
+        if (rootState == 0) {
+            String out = exec("su -c id");
+            rootState = (out != null && out.contains("uid=0")) ? 1 : -1;
+            Log.i(TAG, "root state=" + rootState);
         }
-        return rootOk;
+        return rootState == 1;
     }
 
-    static void key(int keycode) {
-        sendKey(keycode);
-    }
-
+    /** Inject a keycode. Tries root `input keyevent`, then plain `input keyevent`. */
     static void sendKey(int keycode) {
-        // Prefer root (works on unrooted user, rooted shell). Fall back to plain input if permitted.
         String cmd = "input keyevent " + keycode;
-        if (run("su -c \"" + cmd + "\"") == null) {
-            run(cmd);
+        boolean done = false;
+        if (hasRoot()) {
+            done = exec("su -c \"" + cmd + "\"") != null;
         }
-        Log.i(TAG, "key " + keycode);
+        if (!done) {
+            // Fallback: run `input` directly (same uid). Works on many 4.4 firmwares.
+            String r = exec(cmd);
+            if (r != null) done = true;
+        }
+        Log.i(TAG, "key " + keycode + (done ? " ok" : " FAILED"));
     }
 
-    private static String run(String cmd) {
+    /** Run a shell command, return stdout+stderr if exit 0, else null. */
+    private static String exec(String cmd) {
         Process p = null;
         try {
-            p = Runtime.getRuntime().exec(new String[]{"/system/bin/sh", "-c", cmd});
+            p = new ProcessBuilder("/system/bin/sh", "-c", cmd).redirectErrorStream(true).start();
             BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
             StringBuilder sb = new StringBuilder();
             String line;
-            while ((line = r.readLine()) != null) sb.append(line);
+            while ((line = r.readLine()) != null) sb.append(line).append('\n');
             int rc = p.waitFor();
             return rc == 0 ? sb.toString() : null;
         } catch (Throwable t) {
-            Log.e(TAG, "run failed: " + cmd, t);
             return null;
         } finally {
             if (p != null) try { p.destroy(); } catch (Throwable ignored) { }
