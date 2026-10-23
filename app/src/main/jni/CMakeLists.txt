@@ -74,7 +74,7 @@ file(GLOB AVUTIL ${FFMPEG_DIR}/lib/libavutil.a)
 file(GLOB SWSCALE ${FFMPEG_DIR}/lib/libswscale.a)
 target_link_libraries(airplay_jni
     airplay plist playfair dnssd llhttp
-    ${CRYPTO_LIB} ${SSL_LIB}
     ${AVFORMAT} ${AVCODEC} ${SWSCALE} ${AVUTIL}
+    ${SSL_LIB} ${CRYPTO_LIB}
     z
     log android)
