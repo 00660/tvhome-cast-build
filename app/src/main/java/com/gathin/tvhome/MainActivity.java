@@ -155,6 +155,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private List<Cards.Card> cards = Collections.emptyList();
     /** The grid has been laid out and focused since the last resume; the card prompt waits for this. */
     private boolean tilesReady;
+    private boolean initialFocusDone;
     private SelfDrawnUi.CardPrompt cardPrompt;
     /** The in-place self-drawn settings modal; non-null while it is showing over Home. */
     private SettingsModal settingsModal;
@@ -690,6 +691,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (showStats) startStats();
         sky.update();
         handler.postDelayed(minuteTick, MINUTE_MS);
+        // First time Home appears: ensure focus lands on the first tile so the remote cursor is never lost.
+        if (!initialFocusDone) {
+            grid.postDelayed(new Runnable() {
+                int tries = 0;
+                @Override public void run() {
+                    if (settingsModal != null) { initialFocusDone = true; return; }
+                    if (adapter.appCount() == 0) { btnWifi.requestFocus(); initialFocusDone = true; return; }
+                    RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(adapter.focusablePosition(0));
+                    if (vh != null) {
+                        View card = vh.itemView.findViewById(R.id.card);
+                        if (card != null) card.requestFocus();
+                        lastFocused = 0; lastFocusedKey = adapter.keyAt(0); initialFocusDone = true;
+                    } else if (tries++ < 20) { grid.postDelayed(this, 100); }
+                    else { focusTile(0); initialFocusDone = true; }
+                }
+            }, 150);
+        }
         if (festive && diya != null) {
             diya.start();
             Date today = Festival.today();
