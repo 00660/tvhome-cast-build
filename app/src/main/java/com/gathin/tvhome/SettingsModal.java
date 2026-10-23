@@ -199,9 +199,17 @@ final class SettingsModal {
                 HomeKitManager.get().getPinText()), SelfDrawnUi.TextLine.HINT), hintLp());
 
         final SelfDrawnUi.RowView remoteRow = new SelfDrawnUi.RowView(c, c.getString(R.string.homekit_remote_channel), null, false);
-        remoteRow.setValue(ServiceController.remoteChannel(c));
-        remoteRow.setOnClickListener(v -> remoteRow.setValue(ServiceController.remoteChannel(c)));
+        remoteRow.setValue("检测中…");
         content.addView(remoteRow, rowLp());
+        // Probe the remote channel OFF the UI thread (adb connect retries can take seconds → ANR).
+        new Thread(() -> {
+            final String ch = ServiceController.remoteChannel(c);
+            remoteRow.post(() -> remoteRow.setValue(ch));
+        }, "hk-probe").start();
+        remoteRow.setOnClickListener(v -> new Thread(() -> {
+            final String ch = ServiceController.remoteChannel(c);
+            remoteRow.post(() -> remoteRow.setValue(ch));
+        }, "hk-probe").start());
 
         // ---- System ----
         content.addView(new SelfDrawnUi.TextLine(c, c.getString(R.string.settings_section_system),
