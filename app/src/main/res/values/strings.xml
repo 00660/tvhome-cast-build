@@ -123,4 +123,7 @@
     <string name="airplay_name">电视投屏</string>
     <string name="airplay_entry">AirPlay 投屏（屏幕镜像）</string>
     <string name="settings_section_cast">投屏</string>
+    <string name="homekit_entry">HomeKit 配件（家庭 App 遥控）</string>
+    <string name="homekit_section">智能家居</string>
+    <string name="homekit_pin_hint">HomeKit 配对码：123-44-321（在“家庭”App 里添加配件，输入此码）</string>
 </resources>
