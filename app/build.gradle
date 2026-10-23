@@ -55,7 +55,6 @@ dependencies {
     // HomeKit Accessory Protocol (HAP), pure-Java. Provides the Television media accessory.
     implementation 'io.github.hap-java:hap:2.0.7'
     implementation 'org.bouncycastle:bcprov-jdk15on:1.51'
-    implementation 'com.beowulfe:ecc-25519-java:1.0.1'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
 }
