@@ -9,10 +9,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * HAP encrypted session transport: each frame = 2-byte little-endian length, then (ciphertext||16-byte
- * tag). Nonce = 4 zero bytes + 8-byte LE frame counter (per direction). Wraps the plain socket streams.
+ * HAP encrypted session transport. Each frame = 2-byte little-endian length, then (ciphertext||16-byte
+ * tag). HAP requires plaintext per frame <= 1024 bytes, so writes are chunked into <=1024-byte frames;
+ * reads return one frame at a time (<=1024). Nonce = 4 zero bytes + 8-byte LE frame counter.
  */
 final class HapCipher {
+    private static final int MAX_FRAME = 1024;
     private final InputStream in;
     private final OutputStream out;
     private final byte[] readKey, writeKey;
@@ -22,21 +24,30 @@ final class HapCipher {
         this.in = in; this.out = out; this.readKey = readKey; this.writeKey = writeKey;
     }
 
+    /** Read one decrypted frame (<=1024 bytes), or null on EOF. */
     byte[] read() throws Exception {
         byte[] lenB = readFully(in, 2);
+        if (lenB == null) return null;
         int len = (lenB[0] & 0xFF) | ((lenB[1] & 0xFF) << 8);
-        if (len <= 16 || len > 0x400 + 16) return null;
+        if (len <= 16 || len > MAX_FRAME + 16) return null;
         byte[] frame = readFully(in, len);
-        byte[] nonce = nonce(readCounter++);
-        return decrypt(readKey, nonce, frame);
+        if (frame == null) return null;
+        return decrypt(readKey, nonce(readCounter++), frame);
     }
 
+    /** Write plaintext, splitting into <=1024-byte frames as HAP requires. */
     void write(byte[] plain) throws Exception {
-        byte[] nonce = nonce(writeCounter++);
-        byte[] enc = encrypt(writeKey, nonce, plain);
-        int len = enc.length;
-        out.write(new byte[]{(byte) (len & 0xFF), (byte) ((len >> 8) & 0xFF)});
-        out.write(enc);
+        int off = 0;
+        while (off < plain.length) {
+            int chunk = Math.min(MAX_FRAME, plain.length - off);
+            byte[] part = new byte[chunk];
+            System.arraycopy(plain, off, part, 0, chunk);
+            byte[] enc = encrypt(writeKey, nonce(writeCounter++), part);
+            int len = enc.length;
+            out.write(new byte[]{(byte) (len & 0xFF), (byte) ((len >> 8) & 0xFF)});
+            out.write(enc);
+            off += chunk;
+        }
         out.flush();
     }
 
@@ -49,23 +60,48 @@ final class HapCipher {
     private static byte[] encrypt(byte[] key, byte[] nonce, byte[] plain) throws Exception {
         ChaCha20Poly1305 c = new ChaCha20Poly1305();
         c.init(true, new AEADParameters(new KeyParameter(key), 128, nonce));
-        byte[] out = new byte[c.getOutputSize(plain.length)];
-        int n = c.processBytes(plain, 0, plain.length, out, 0);
-        n += c.doFinal(out, n);
-        if (n != out.length) { byte[] r = new byte[n]; System.arraycopy(out, 0, r, 0, n); return r; }
-        return out;
+        byte[] o = new byte[c.getOutputSize(plain.length)];
+        int n = c.processBytes(plain, 0, plain.length, o, 0); n += c.doFinal(o, n);
+        if (n != o.length) { byte[] r = new byte[n]; System.arraycopy(o, 0, r, 0, n); return r; }
+        return o;
     }
     private static byte[] decrypt(byte[] key, byte[] nonce, byte[] cipher) throws Exception {
         ChaCha20Poly1305 c = new ChaCha20Poly1305();
         c.init(false, new AEADParameters(new KeyParameter(key), 128, nonce));
-        byte[] out = new byte[c.getOutputSize(cipher.length)];
-        int n = c.processBytes(cipher, 0, cipher.length, out, 0);
-        n += c.doFinal(out, n);
-        byte[] r = new byte[n]; System.arraycopy(out, 0, r, 0, n); return r;
+        byte[] o = new byte[c.getOutputSize(cipher.length)];
+        int n = c.processBytes(cipher, 0, cipher.length, o, 0); n += c.doFinal(o, n);
+        byte[] r = new byte[n]; System.arraycopy(o, 0, r, 0, n); return r;
     }
     private static byte[] readFully(InputStream in, int n) throws Exception {
         byte[] b = new byte[n]; int off = 0;
         while (off < n) { int r = in.read(b, off, n - off); if (r < 0) return null; off += r; }
         return b;
+    }
+
+    /** Read a full HTTP response (headers+body) assembled from multiple encrypted frames. */
+    static String readHttpResponse(HapCipher cipher) throws Exception {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        int contentLength = -1, headerEnd = -1;
+        while (true) {
+            byte[] chunk = cipher.read();
+            if (chunk == null) return null;
+            buf.write(chunk, 0, chunk.length);
+            byte[] arr = buf.toByteArray();
+            if (headerEnd < 0) {
+                String s = new String(arr, "UTF-8");
+                int idx = s.indexOf("\r\n\r\n");
+                if (idx >= 0) {
+                    headerEnd = idx + 4;
+                    for (String line : s.substring(0, idx).split("\r\n")) {
+                        int c = line.indexOf(':');
+                        if (c > 0 && line.substring(0, c).trim().equalsIgnoreCase("Content-Length"))
+                            contentLength = Integer.parseInt(line.substring(c + 1).trim());
+                    }
+                }
+            }
+            if (headerEnd >= 0 && contentLength >= 0 && arr.length - headerEnd >= contentLength) {
+                return new String(arr, "UTF-8");
+            }
+        }
     }
 }
