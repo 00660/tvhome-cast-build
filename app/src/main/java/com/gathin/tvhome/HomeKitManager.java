@@ -4,7 +4,6 @@ import android.content.Context;
 import android.util.Log;
 
 import com.gathin.tvhome.hk.HapAdvertiser;
-import com.gathin.tvhome.hk.HapKeyStore;
 import com.gathin.tvhome.hk.HapServer;
 import com.gathin.tvhome.hk.TvAccessory;
 
@@ -41,9 +40,8 @@ final class HomeKitManager {
                 accessory = new TvAccessory(onActiveOn, onActiveOff);
                 server = new HapServer(ctx.getApplicationContext(), accessory, PORT);
                 server.start();
-                HapKeyStore ks = new HapKeyStore(ctx.getApplicationContext());
                 advertiser = new HapAdvertiser();
-                advertiser.start(ctx.getApplicationContext(), "电视投屏", ks.accessoryId(), PORT, 1);
+                advertiser.start(ctx.getApplicationContext(), "电视投屏", server.accessoryId(), PORT, 1);
                 running = true;
                 Log.i(TAG, "HomeKit HAP started on " + PORT + ", pin=" + getPinText() + ", advertised");
             } catch (Throwable t) {
