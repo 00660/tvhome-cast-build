@@ -154,10 +154,34 @@ final class SettingsModal {
         content.addView(new SelfDrawnUi.TextLine(c, c.getString(R.string.settings_section_cast),
                 SelfDrawnUi.TextLine.SECTION), sectionLp());
 
-        SelfDrawnUi.RowView airplay = new SelfDrawnUi.RowView(c, c.getString(R.string.airplay_entry), null, true);
-        airplay.setOnClickListener(v -> host.settingsLaunchWallpaper(
-                new Intent(host, AirPlayPlaybackActivity.class), MainActivity.PICK_AIRPLAY));
-        content.addView(airplay, rowLp());
+        // AirPlay: a single ON/OFF switch. When on, the iPhone mirroring auto-appears full-screen.
+        final SelfDrawnUi.RowView airplaySwitch = new SelfDrawnUi.RowView(c, c.getString(R.string.airplay_switch), null, false);
+        airplaySwitch.setValue(c.getString(ServiceController.isAirPlayOn(c) ? R.string.on : R.string.off));
+        airplaySwitch.setOnClickListener(v -> {
+            boolean on = !ServiceController.isAirPlayOn(c);
+            boolean ok = ServiceController.setAirPlay(c, on);
+            if (on && !ok) { banner.show(c.getString(R.string.airplay_failed), 3000); }
+            airplaySwitch.setValue(c.getString(on ? R.string.on : R.string.off));
+        });
+        content.addView(airplaySwitch, rowLp());
+
+        // HomeKit: on/off + pairing code + remote channel shown inline.
+        final SelfDrawnUi.RowView homekitSwitch = new SelfDrawnUi.RowView(c, c.getString(R.string.homekit_switch), null, false);
+        homekitSwitch.setValue(c.getString(ServiceController.isHomeKitOn(c) ? R.string.on : R.string.off));
+        homekitSwitch.setOnClickListener(v -> {
+            boolean on = !ServiceController.isHomeKitOn(c);
+            ServiceController.setHomeKit(c, on);
+            homekitSwitch.setValue(c.getString(on ? R.string.on : R.string.off));
+        });
+        content.addView(homekitSwitch, rowLp());
+
+        content.addView(new SelfDrawnUi.TextLine(c, c.getString(R.string.homekit_pin_line,
+                HomeKitManager.get().getPinText()), SelfDrawnUi.TextLine.HINT), hintLp());
+
+        final SelfDrawnUi.RowView remoteRow = new SelfDrawnUi.RowView(c, c.getString(R.string.homekit_remote_channel), null, false);
+        remoteRow.setValue(ServiceController.remoteChannel(c));
+        remoteRow.setOnClickListener(v -> remoteRow.setValue(ServiceController.remoteChannel(c)));
+        content.addView(remoteRow, rowLp());
 
         // ---- System ----
         content.addView(new SelfDrawnUi.TextLine(c, c.getString(R.string.settings_section_system),
@@ -186,6 +210,15 @@ final class SettingsModal {
                 "com.konka.systemsetting", "com.konka.systemsetting.MainActivity"))));
         content.addView(tvSettings, rowLp());
 
+        final SelfDrawnUi.RowView bootSwitch = new SelfDrawnUi.RowView(c, c.getString(R.string.boot_start), null, false);
+        bootSwitch.setValue(c.getString(ServiceController.isBootStart(c) ? R.string.on : R.string.off));
+        bootSwitch.setOnClickListener(v -> {
+            boolean on = !ServiceController.isBootStart(c);
+            ServiceController.setBootStart(c, on);
+            bootSwitch.setValue(c.getString(on ? R.string.on : R.string.off));
+        });
+        content.addView(bootSwitch, rowLp());
+
         SelfDrawnUi.RowView close = new SelfDrawnUi.RowView(c, c.getString(R.string.qr_back), null, false);
         close.setOnClickListener(v -> close());
         LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(-1, -2);
@@ -196,6 +229,12 @@ final class SettingsModal {
     private LinearLayout.LayoutParams rowLp() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = SelfDrawnUi.dpi(host, 10);
+        return lp;
+    }
+
+    private LinearLayout.LayoutParams hintLp() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = SelfDrawnUi.dpi(host, 6);
         return lp;
     }
 
