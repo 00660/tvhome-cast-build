@@ -3,6 +3,8 @@ package com.gathin.tvhome;
 import android.content.Context;
 import android.util.Log;
 
+import com.gathin.tvhome.hk.HapAdvertiser;
+import com.gathin.tvhome.hk.HapKeyStore;
 import com.gathin.tvhome.hk.HapServer;
 import com.gathin.tvhome.hk.TvAccessory;
 
@@ -17,6 +19,7 @@ final class HomeKitManager {
 
     private static HomeKitManager instance;
     private HapServer server;
+    private HapAdvertiser advertiser;
     private TvAccessory accessory;
     private boolean running;
 
@@ -38,8 +41,11 @@ final class HomeKitManager {
                 accessory = new TvAccessory(onActiveOn, onActiveOff);
                 server = new HapServer(ctx.getApplicationContext(), accessory, PORT);
                 server.start();
+                HapKeyStore ks = new HapKeyStore(ctx.getApplicationContext());
+                advertiser = new HapAdvertiser();
+                advertiser.start(ctx.getApplicationContext(), "电视投屏", ks.accessoryId(), PORT, 1);
                 running = true;
-                Log.i(TAG, "HomeKit HAP started on " + PORT + ", pin=" + getPinText());
+                Log.i(TAG, "HomeKit HAP started on " + PORT + ", pin=" + getPinText() + ", advertised");
             } catch (Throwable t) {
                 Log.e(TAG, "HomeKit start failed", t);
                 running = false;
@@ -48,6 +54,7 @@ final class HomeKitManager {
     }
 
     synchronized void stop() {
+        try { if (advertiser != null) advertiser.stop(); } catch (Throwable ignored) { }
         try { if (server != null) server.stop(); } catch (Throwable ignored) { }
         server = null; running = false;
     }
