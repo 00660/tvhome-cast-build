@@ -102,7 +102,7 @@ public final class HapServer {
                     writeResp(out, 200, "application/pairing+tlv8", respBody);
                     if (respBody.length >= 2 && respBody[0] == Tlv8.STATE && respBody[2] == 4) {
                         // Pair verify complete → wrap streams in cipher for the rest of the connection
-                        HapCipher cipher = new HapCipher(in, out, verify.readKey, verify.writeKey);
+                        HapCipher cipher = new HapCipher(in, out, verify.writeKey, verify.readKey);
                         serveEncrypted(cipher);
                         break;
                     }
