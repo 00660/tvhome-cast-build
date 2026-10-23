@@ -28,11 +28,14 @@ final class RemoteKeys {
         return rootState == 1;
     }
 
-    /** Inject a keycode. Tries root `input keyevent`, then plain `input keyevent`. */
-    static void sendKey(int keycode) {
+    /** Inject a keycode: loopback adb (no root) → root `input` → plain `input`. */
+    static void sendKey(android.content.Context ctx, int keycode) {
         String cmd = "input keyevent " + keycode;
         boolean done = false;
-        if (hasRoot()) {
+        // 1) loopback adb (shell uid, no root needed) if available
+        try { if (ctx != null) done = AdbRemote.get().sendKey(ctx.getApplicationContext(), keycode); } catch (Throwable ignored) { }
+        // 2) root
+        if (!done && hasRoot()) {
             done = exec("su -c \"" + cmd + "\"") != null;
         }
         if (!done) {
