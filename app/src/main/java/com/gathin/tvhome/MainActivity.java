@@ -493,11 +493,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return true;
     }
 
-    /** Starts the DLNA receiver once, so phones on the same Wi-Fi can find this TV and cast to it. */
+    /** Starts the DLNA receiver if enabled in settings, so phones on the same Wi-Fi can cast to it. */
     private void startDlna() {
+        if (!ServiceController.isDlnaOn(this)) return;
         if (dlnaServer != null) return;
         dlnaServer = DlnaServer.get(this);
         dlnaServer.start();
+    }
+
+    /** Toggle DLNA at runtime from settings. */
+    void applyDlnaEnabled(boolean on) {
+        if (on) { startDlna(); }
+        else if (dlnaServer != null) { dlnaServer.stop(); dlnaServer = null; }
     }
 
     /** Opens the self-drawn settings modal over Home (no page jump). */
