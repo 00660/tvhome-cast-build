@@ -25,7 +25,7 @@ public final class NativePlayer {
         nativeSetRawSurface(s, rotate90 ? 90 : 0);
     }
     public static void setRawSurface(Surface s, boolean rotate90) { nativeSetRawSurface(s, rotate90 ? 90 : 0); }
-    public static void feedRaw(boolean isH265, byte[] nal) { nativeFeedRaw(isH265, nal); }
+    public static void feedRaw(boolean isH265, byte[] nal) { nativeFeedRaw(isH265 ? 1 : 0, nal); }
     public static void releaseRaw() { nativeReleaseRaw(); }
 
     private static native boolean nativePlayUrl(String url, Surface surface, int rotate);
