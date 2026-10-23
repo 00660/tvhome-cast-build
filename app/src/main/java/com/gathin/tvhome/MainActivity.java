@@ -469,6 +469,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Not after recreate(): the launch intent survives it and would open the settings again.
         if (savedInstanceState == null) openLauncherSettingsIfAsked(getIntent());
         startDlna();
+        startHomeKit();
         // A config change (or a wallpaper rebuild) while the modal was open: restore it on the new Home.
         if (savedInstanceState != null && savedInstanceState.getBoolean("settings_open")) {
             settingsModalOpen = true;
@@ -497,6 +498,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (dlnaServer != null) return;
         dlnaServer = DlnaServer.get(this);
         dlnaServer.start();
+    }
+
+    /** Starts the HomeKit media accessory so the iOS Home app can pair and remote-control the TV. */
+    private void startHomeKit() {
+        HomeKitManager.get().start(this,
+                () -> SelfDrawnUi.Toast.show(this, "HomeKit: 已开启投屏"),
+                () -> SelfDrawnUi.Toast.show(this, "HomeKit: 已停止投屏"));
     }
 
     /** Opens the self-drawn settings modal over Home (no page jump). */
