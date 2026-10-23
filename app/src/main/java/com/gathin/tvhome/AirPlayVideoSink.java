@@ -89,6 +89,12 @@ final class AirPlayVideoSink {
                 Media m = new Media(vlc(), Uri.parse("tcp://127.0.0.1:" + port));
                 m.addOption(":demux=h264");
                 m.addOption(":h264-fps=30");
+                // AirPlay mirror from a phone is usually portrait; rotate 90° so it fills the TV screen.
+                // (Video apps that cast landscape already send landscape, and rotation is skipped via setting.)
+                if (ServiceController.isAirPlayRotate(app)) {
+                    m.addOption(":video-filter=transform");
+                    m.addOption(":transform-type=90");
+                }
                 m.setHWDecoderEnabled(false, false);
                 p.setMedia(m);
                 m.release();
