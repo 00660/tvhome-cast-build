@@ -66,6 +66,7 @@ dependencies {
         exclude group: 'org.glassfish', module: 'javax.json'
     }
     implementation 'org.bouncycastle:bcprov-jdk15on:1.51'
+    implementation 'dev.mobile:dadb:2.0.0'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
 }
