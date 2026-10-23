@@ -58,7 +58,6 @@ final class HomeKitManager {
     }
 
     synchronized void stop() {
-        try { if (standalone != null) standalone.stop(); } catch (Throwable ignored) { }
         try { if (bridge != null) bridge.stop(); } catch (Throwable ignored) { }
         try { if (server != null) server.stop(); } catch (Throwable ignored) { }
         standalone = null; bridge = null; server = null; running = false;
