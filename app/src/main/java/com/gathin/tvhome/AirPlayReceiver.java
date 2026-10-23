@@ -1,6 +1,7 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
+import android.content.Intent;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.util.Log;
@@ -12,22 +13,28 @@ import java.nio.ByteBuffer;
 /**
  * AirPlay mirror receiver. The AirPlay protocol (pairing, FairPlay, RTP) is handled by the bundled
  * open-source UxPlay engine (GPL) in libairplay_jni.so. It hands us bare H.264 Annex-B video and AAC
- * audio. Video is decoded in software by libVLC (via AirPlayVideoSink) so high-bitrate mirroring works
- * on this TV's weak hardware; audio is decoded by MediaCodec. Works on Android 4.4.
+ * audio. Video is decoded in software by libVLC (AirPlayVideoSink) so high-bitrate mirroring works on
+ * this TV's weak hardware; audio by MediaCodec. Works on Android 4.4.
+ *
+ * Standalone (no Activity): the Settings switch starts/stops it. VideoSink starts when a video
+ * layout is attached by AirPlayPlaybackActivity (which is auto-launched when a client mirrors).
  */
 public final class AirPlayReceiver {
     static { try { System.loadLibrary("airplay_jni"); } catch (Throwable t) { Log.e("AirPlay", "lib load failed", t); } }
 
     private static final String TAG = "AirPlay";
-
     private static AirPlayReceiver sInstance;
+
     private MediaCodec audioCodec;
     private AirPlayVideoSink videoSink;
+    private Context app;
     private VLCVideoLayout layout;
     private volatile boolean started;
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
+    /** Fired from the native thread when a client connects/disconnects. */
     public interface Listener { void onConnected(); void onDisconnected(); }
-    private Listener listener;
+    private volatile Listener listener;
     public void setListener(Listener l) { listener = l; }
 
     public static synchronized AirPlayReceiver get() {
@@ -37,20 +44,24 @@ public final class AirPlayReceiver {
 
     public boolean isStarted() { return started; }
 
-    public void setVideoLayout(Context ctx, VLCVideoLayout l) {
+    /** Called by AirPlayPlaybackActivity when it is shown (on connect) to attach the video surface. */
+    public void setVideoLayout(VLCVideoLayout l) {
         this.layout = l;
-        if (videoSink == null) videoSink = new AirPlayVideoSink(ctx);
-        videoSink.setLayout(l);
+        if (videoSink == null && app != null) videoSink = new AirPlayVideoSink(app);
+        if (videoSink != null) videoSink.setLayout(l);
     }
 
+    public void clearVideoLayout() {
+        this.layout = null;
+    }
+
+    /** Start the AirPlay server (called by the Settings switch / boot). */
     public boolean start(Context ctx, String name, int width, int height) {
         if (started) return true;
+        app = ctx.getApplicationContext();
         Log.i(TAG, "AirPlay start");
-        if (videoSink == null) videoSink = new AirPlayVideoSink(ctx);
-        videoSink.setLayout(layout);
-        videoSink.start();
         String mac = "AA:BB:CC:DD:EE:FF";
-        String keyfile = new java.io.File(ctx.getFilesDir(), "airplay.key").getAbsolutePath();
+        String keyfile = new java.io.File(app.getFilesDir(), "airplay.key").getAbsolutePath();
         try {
             boolean ok = nativeStart(name, mac, keyfile, width, height);
             started = ok;
@@ -71,7 +82,8 @@ public final class AirPlayReceiver {
     // ---- called from native ----
     private void onVideo(int h265, byte[] data) {
         if (data == null || data.length == 0) return;
-        if (h265 != 0) { /* HEVC: libVLC h264 demux won't handle; most AirPlay mirror is H.264 */ }
+        // Lazily start the video sink the first time video arrives (layout attached by the activity).
+        if (videoSink == null && app != null) { videoSink = new AirPlayVideoSink(app); videoSink.setLayout(layout); videoSink.start(); }
         if (videoSink != null) videoSink.write(data);
     }
 
@@ -85,13 +97,22 @@ public final class AirPlayReceiver {
     private void onConnection(boolean connected) {
         Log.i(TAG, "connection " + connected);
         final Listener l = listener;
-        if (connected) { if (l != null) l.onConnected(); }
-        else { releaseAudio(); if (l != null) l.onDisconnected(); }
+        if (connected) {
+            // Auto-show the full-screen mirror surface when a client starts streaming.
+            if (app != null) {
+                main.post(() -> {
+                    try {
+                        Intent i = new Intent(app, AirPlayPlaybackActivity.class);
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        app.startActivity(i);
+                    } catch (Throwable ignored) { }
+                });
+            }
+            if (l != null) l.onConnected();
+        } else { releaseAudio(); if (l != null) l.onDisconnected(); }
     }
 
-    private void onMirrorRunning(boolean running) {
-        Log.i(TAG, "mirror running " + running);
-    }
+    private void onMirrorRunning(boolean running) { Log.i(TAG, "mirror running " + running); }
 
     private synchronized void initAudio() {
         releaseAudio();
