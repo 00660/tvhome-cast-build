@@ -30,6 +30,7 @@ public final class AirPlayReceiver {
     private Context app;
     private VLCVideoLayout layout;
     private volatile boolean started;
+    private android.net.wifi.WifiManager.MulticastLock multicastLock;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
     /** Fired from the native thread when a client connects/disconnects. */
@@ -60,6 +61,17 @@ public final class AirPlayReceiver {
         if (started) return true;
         app = ctx.getApplicationContext();
         Log.i(TAG, "AirPlay start");
+        // Android 4.4 drops multicast unless a MulticastLock is held — without it mdnsd can't
+        // advertise _airplay._tcp, so iPhones never see this receiver.
+        try {
+            android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) app.getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null) {
+                multicastLock = wifi.createMulticastLock("airplay-mdns");
+                multicastLock.setReferenceCounted(false);
+                multicastLock.acquire();
+                Log.i(TAG, "multicast lock acquired");
+            }
+        } catch (Throwable t) { Log.e(TAG, "multicast lock failed", t); }
         String mac = "AA:BB:CC:DD:EE:FF";
         String keyfile = new java.io.File(app.getFilesDir(), "airplay.key").getAbsolutePath();
         try {
@@ -74,6 +86,8 @@ public final class AirPlayReceiver {
 
     public void stop() {
         try { nativeStop(); } catch (Throwable ignored) { }
+        try { if (multicastLock != null && multicastLock.isHeld()) multicastLock.release(); } catch (Throwable ignored) { }
+        multicastLock = null;
         releaseAudio();
         if (videoSink != null) { videoSink.stop(); videoSink = null; }
         started = false;
