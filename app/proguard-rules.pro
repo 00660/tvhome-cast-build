@@ -36,3 +36,13 @@
 -dontwarn org.slf4j.**
 -keep class com.gathin.tvhome.HomeKit** { *; }
 -keep class com.gathin.tvhome.RemoteKeys { *; }
+
+# dadb (loopback ADB client) + okio + kotlin
+-keep class dadb.** { *; }
+-keep class okio.** { *; }
+-keep class kotlin.** { *; }
+-dontwarn dadb.**
+-dontwarn okio.**
+-dontwarn kotlin.**
+-dontwarn org.jetbrains.**
+-keep class com.gathin.tvhome.AdbRemote { *; }
