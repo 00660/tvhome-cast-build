@@ -23,13 +23,11 @@
 -keep class com.gathin.tvhome.DlnaPlaybackActivity { *; }
 
 # HomeKit (hap-java) + BouncyCastle + Netty: keep everything (reflection, JNI-free but uses provider lookups)
--keep class io.github.hapjava.** { *; }
 -keep class org.bouncycastle.** { *; }
 -keep class io.netty.** { *; }
 -keep class javax.jmdns.** { *; }
 -keep class com.beowulfe.** { *; }
 -keep class org.slf4j.** { *; }
--dontwarn io.github.hapjava.**
 -dontwarn org.bouncycastle.**
 -dontwarn io.netty.**
 -dontwarn javax.jmdns.**
@@ -46,3 +44,5 @@
 -dontwarn kotlin.**
 -dontwarn org.jetbrains.**
 -keep class com.gathin.tvhome.AdbRemote { *; }
+
+-keep class com.gathin.tvhome.hk.** { *; }
