@@ -50,7 +50,7 @@ final class HomeKitManager {
                     int kc = mapRemoteKey(key);
                     if (kc != 0) RemoteKeys.sendKey(appContext, kc);
                 });
-                nextServer = new HapServer(appContext, nextAccessory, PORT);
+                nextServer = new HapServer(appContext, nextAccessory, PORT, getPinText());
                 nextServer.start();
                 nextAdvertiser = new HapAdvertiser();
                 if (!nextAdvertiser.start(appContext, "电视投屏", nextServer.accessoryId(), PORT, 1)) {

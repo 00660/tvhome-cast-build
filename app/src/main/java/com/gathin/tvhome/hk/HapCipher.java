@@ -28,11 +28,11 @@ final class HapCipher {
     byte[] read() throws Exception {
         byte[] lenB = readFully(in, 2);
         if (lenB == null) return null;
-        int len = (lenB[0] & 0xFF) | ((lenB[1] & 0xFF) << 8);
-        if (len <= 16 || len > MAX_FRAME + 16) return null;
-        byte[] frame = readFully(in, len);
+        int plainLen = (lenB[0] & 0xFF) | ((lenB[1] & 0xFF) << 8);
+        if (plainLen <= 0 || plainLen > MAX_FRAME) return null;
+        byte[] frame = readFully(in, plainLen + 16);
         if (frame == null) return null;
-        return decrypt(readKey, nonce(readCounter++), frame);
+        return decrypt(readKey, nonce(readCounter++), lenB, frame);
     }
 
     /** Write plaintext, splitting into <=1024-byte frames as HAP requires. */
@@ -42,9 +42,9 @@ final class HapCipher {
             int chunk = Math.min(MAX_FRAME, plain.length - off);
             byte[] part = new byte[chunk];
             System.arraycopy(plain, off, part, 0, chunk);
-            byte[] enc = encrypt(writeKey, nonce(writeCounter++), part);
-            int len = enc.length;
-            out.write(new byte[]{(byte) (len & 0xFF), (byte) ((len >> 8) & 0xFF)});
+            byte[] lenB = new byte[]{(byte) (chunk & 0xFF), (byte) ((chunk >> 8) & 0xFF)};
+            byte[] enc = encrypt(writeKey, nonce(writeCounter++), lenB, part);
+            out.write(lenB);
             out.write(enc);
             off += chunk;
         }
@@ -57,17 +57,19 @@ final class HapCipher {
         return n;
     }
 
-    private static byte[] encrypt(byte[] key, byte[] nonce, byte[] plain) throws Exception {
+    private static byte[] encrypt(byte[] key, byte[] nonce, byte[] aad, byte[] plain) throws Exception {
         ChaCha20Poly1305 c = new ChaCha20Poly1305();
         c.init(true, new AEADParameters(new KeyParameter(key), 128, nonce));
+        c.processAADBytes(aad, 0, aad.length);
         byte[] o = new byte[c.getOutputSize(plain.length)];
         int n = c.processBytes(plain, 0, plain.length, o, 0); n += c.doFinal(o, n);
         if (n != o.length) { byte[] r = new byte[n]; System.arraycopy(o, 0, r, 0, n); return r; }
         return o;
     }
-    private static byte[] decrypt(byte[] key, byte[] nonce, byte[] cipher) throws Exception {
+    private static byte[] decrypt(byte[] key, byte[] nonce, byte[] aad, byte[] cipher) throws Exception {
         ChaCha20Poly1305 c = new ChaCha20Poly1305();
         c.init(false, new AEADParameters(new KeyParameter(key), 128, nonce));
+        c.processAADBytes(aad, 0, aad.length);
         byte[] o = new byte[c.getOutputSize(cipher.length)];
         int n = c.processBytes(cipher, 0, cipher.length, o, 0); n += c.doFinal(o, n);
         byte[] r = new byte[n]; System.arraycopy(o, 0, r, 0, n); return r;

@@ -23,6 +23,7 @@ public final class HapServer {
     private final HapKeyStore keys;
     private final Accessory accessory;
     private final int port;
+    private final String pin;
     private volatile boolean running;
     private ServerSocket serverSocket;
 
@@ -33,27 +34,33 @@ public final class HapServer {
         int aid();
     }
 
-    public HapServer(Context c, Accessory accessory, int port) {
+    public HapServer(Context c, Accessory accessory, int port, String pin) {
         this.app = c.getApplicationContext();
         this.keys = new HapKeyStore(app);
         this.accessory = accessory;
         this.port = port;
+        this.pin = pin;
     }
 
     public String accessoryId() { return keys.accessoryId(); }
 
-    public void start() {
+    public synchronized void start() throws Exception {
         if (running) return;
+        final ServerSocket listener = new ServerSocket(port);
+        serverSocket = listener;
         running = true;
         new Thread(() -> {
             try {
-                serverSocket = new ServerSocket(port);
                 Log.i(TAG, "HAP listening on " + port);
                 while (running) {
-                    final Socket s = serverSocket.accept();
+                    final Socket s = listener.accept();
                     new Thread(() -> handleConn(s), "hap-conn").start();
                 }
-            } catch (Throwable t) { Log.e(TAG, "server", t); }
+            } catch (Throwable t) {
+                if (running) Log.e(TAG, "accept loop failed", t);
+                running = false;
+                try { listener.close(); } catch (Throwable ignored) { }
+            }
         }, "hap-accept").start();
     }
 
@@ -91,16 +98,24 @@ public final class HapServer {
                 String respType = "application/hap+json";
 
                 if (pathOnly.equals("/pair-setup")) {
-                    if (setup == null) setup = new HapPairSetup(setupStore(), pin());
+                    int requestState = tlvValue(body, Tlv8.STATE);
+                    Log.i(TAG, "pair-setup request state=" + requestState);
+                    if (setup == null) setup = new HapPairSetup(setupStore(), pin);
                     respBody = setup.handle(body);
                     respType = "application/pairing+tlv8";
+                    logPairingResponse("pair-setup", respBody);
                     writeResp(out, 200, respType, respBody);
                 } else if (pathOnly.equals("/pair-verify")) {
+                    int requestState = tlvValue(body, Tlv8.STATE);
+                    Log.i(TAG, "pair-verify request state=" + requestState);
                     if (verify == null) { verify = new HapPairVerify(verifyStore()); }
                     // verify M1 returns M2 (plaintext); then M3/M4 plaintext, then switch to encrypted
                     respBody = verify.handle(body);
+                    logPairingResponse("pair-verify", respBody);
                     writeResp(out, 200, "application/pairing+tlv8", respBody);
-                    if (respBody.length >= 2 && respBody[0] == Tlv8.STATE && respBody[2] == 4) {
+                    if (tlvValue(respBody, Tlv8.STATE) == 4
+                            && tlvValue(respBody, Tlv8.ERROR) < 0
+                            && verify.writeKey != null && verify.readKey != null) {
                         // Pair verify complete → wrap streams in cipher for the rest of the connection
                         HapCipher cipher = new HapCipher(in, out, verify.writeKey, verify.readKey);
                         serveEncrypted(cipher);
@@ -122,38 +137,67 @@ public final class HapServer {
     /** Serve HAP requests over an established encrypted session. */
     private void serveEncrypted(HapCipher cipher) {
         try {
+            ByteArrayOutputStream pending = new ByteArrayOutputStream();
             while (running) {
                 byte[] plain = cipher.read();
                 if (plain == null) break;
-                String req = new String(plain, "UTF-8");
-                String head = req.substring(0, req.indexOf("\r\n\r\n") + 4);
-                String bodyStr = req.substring(req.indexOf("\r\n\r\n") + 4);
-                String first = head.split("\r\n")[0];
-                String[] parts = first.split(" ");
-                String method = parts[0];
-                String path = parts[1];
-                String pathOnly = path.split("\\?")[0];
-                String query = path.contains("?") ? path.substring(path.indexOf('?') + 1) : "";
+                pending.write(plain);
 
-                int status = 200;
-                String json;
-                if (pathOnly.equals("/accessories")) {
-                    json = accessory.accessoriesJson();
-                } else if (pathOnly.equals("/characteristics")) {
-                    json = accessory.onCharacteristics(method, query, bodyStr);
-                } else {
-                    status = 404; json = "{}";
+                while (true) {
+                    byte[] request = pending.toByteArray();
+                    int headerEnd = indexOf(request, new byte[]{'\r','\n','\r','\n'});
+                    if (headerEnd < 0) break;
+                    int contentLength = contentLength(request, headerEnd);
+                    int totalLength = headerEnd + 4 + contentLength;
+                    if (request.length < totalLength) break;
+
+                    String req = new String(request, 0, totalLength, "UTF-8");
+                    String head = req.substring(0, headerEnd + 4);
+                    String bodyStr = req.substring(headerEnd + 4);
+                    String first = head.split("\r\n")[0];
+                    String[] parts = first.split(" ");
+                    if (parts.length < 2) throw new IllegalArgumentException("malformed encrypted HTTP request");
+                    String method = parts[0];
+                    String path = parts[1];
+                    String pathOnly = path.split("\\?")[0];
+                    String query = path.contains("?") ? path.substring(path.indexOf('?') + 1) : "";
+
+                    int status = 200;
+                    String json;
+                    if (pathOnly.equals("/accessories")) {
+                        json = accessory.accessoriesJson();
+                    } else if (pathOnly.equals("/characteristics")) {
+                        json = accessory.onCharacteristics(method, query, bodyStr);
+                    } else {
+                        status = 404; json = "{}";
+                    }
+                    String resp = "HTTP/1.1 " + status + " OK\r\nContent-Type: application/hap+json\r\nContent-Length: "
+                            + json.getBytes("UTF-8").length + "\r\n\r\n" + json;
+                    cipher.write(resp.getBytes("UTF-8"));
+
+                    pending.reset();
+                    if (request.length > totalLength) pending.write(request, totalLength, request.length - totalLength);
                 }
-                String resp = "HTTP/1.1 " + status + " OK\r\nContent-Type: application/hap+json\r\nContent-Length: "
-                        + json.getBytes("UTF-8").length + "\r\n\r\n" + json;
-                cipher.write(resp.getBytes("UTF-8"));
             }
         } catch (Throwable t) { Log.e(TAG, "enc", t); }
     }
 
-    private String pin() {
-        // Stable setup code. HAP requires format with no ambiguous chars.
-        return "12344321";
+    private static int contentLength(byte[] request, int headerEnd) throws Exception {
+        String head = new String(request, 0, headerEnd, "UTF-8");
+        for (String line : head.split("\r\n")) {
+            int c = line.indexOf(':');
+            if (c > 0 && line.substring(0, c).trim().equalsIgnoreCase("Content-Length"))
+                return Integer.parseInt(line.substring(c + 1).trim());
+        }
+        return 0;
+    }
+
+    private static int indexOf(byte[] data, byte[] needle) {
+        outer: for (int i = 0; i <= data.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) if (data[i + j] != needle[j]) continue outer;
+            return i;
+        }
+        return -1;
     }
 
     private HapPairSetup.Store setupStore() {
@@ -172,6 +216,17 @@ public final class HapServer {
             public byte[] accessoryEd25519Public() { return keys.ed25519Public(); }
             public byte[] accessoryEd25519Sign(byte[] d) { return keys.ed25519Sign(d); }
         };
+    }
+
+    private static int tlvValue(byte[] data, int type) {
+        byte[] value = Tlv8.find(Tlv8.decode(data), type);
+        return value == null || value.length == 0 ? -1 : value[0] & 0xff;
+    }
+
+    private static void logPairingResponse(String path, byte[] response) {
+        int state = tlvValue(response, Tlv8.STATE);
+        int error = tlvValue(response, Tlv8.ERROR);
+        Log.i(TAG, path + " response state=" + state + (error < 0 ? "" : " error=" + error));
     }
 
     // ---- HTTP helpers ----
