@@ -154,6 +154,17 @@ final class SettingsModal {
         content.addView(new SelfDrawnUi.TextLine(c, c.getString(R.string.settings_section_cast),
                 SelfDrawnUi.TextLine.SECTION), sectionLp());
 
+        // DLNA: ON/OFF switch (default on).
+        final SelfDrawnUi.RowView dlnaSwitch = new SelfDrawnUi.RowView(c, c.getString(R.string.dlna_switch), null, false);
+        dlnaSwitch.setValue(c.getString(ServiceController.isDlnaOn(c) ? R.string.on : R.string.off));
+        dlnaSwitch.setOnClickListener(v -> {
+            boolean on = !ServiceController.isDlnaOn(c);
+            ServiceController.setDlnaOn(c, on);
+            host.applyDlnaEnabled(on);
+            dlnaSwitch.setValue(c.getString(on ? R.string.on : R.string.off));
+        });
+        content.addView(dlnaSwitch, rowLp());
+
         // AirPlay: a single ON/OFF switch. When on, the iPhone mirroring auto-appears full-screen.
         final SelfDrawnUi.RowView airplaySwitch = new SelfDrawnUi.RowView(c, c.getString(R.string.airplay_switch), null, false);
         airplaySwitch.setValue(c.getString(ServiceController.isAirPlayOn(c) ? R.string.on : R.string.off));
@@ -164,6 +175,15 @@ final class SettingsModal {
             airplaySwitch.setValue(c.getString(on ? R.string.on : R.string.off));
         });
         content.addView(airplaySwitch, rowLp());
+
+        final SelfDrawnUi.RowView airplayRotate = new SelfDrawnUi.RowView(c, c.getString(R.string.airplay_rotate), null, false);
+        airplayRotate.setValue(c.getString(ServiceController.isAirPlayRotate(c) ? R.string.on : R.string.off));
+        airplayRotate.setOnClickListener(v -> {
+            boolean on = !ServiceController.isAirPlayRotate(c);
+            ServiceController.setAirPlayRotate(c, on);
+            airplayRotate.setValue(c.getString(on ? R.string.on : R.string.off));
+        });
+        content.addView(airplayRotate, rowLp());
 
         // HomeKit: on/off + pairing code + remote channel shown inline.
         final SelfDrawnUi.RowView homekitSwitch = new SelfDrawnUi.RowView(c, c.getString(R.string.homekit_switch), null, false);
