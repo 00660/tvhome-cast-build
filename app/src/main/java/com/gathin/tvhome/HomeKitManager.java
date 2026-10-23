@@ -54,6 +54,25 @@ final class HomeKitManager {
         }, "homekit-start").start();
     }
 
+    private static int mapRemoteKey(int key) {
+        switch (key) {
+            case 4: return android.view.KeyEvent.KEYCODE_DPAD_UP;
+            case 5: return android.view.KeyEvent.KEYCODE_DPAD_DOWN;
+            case 6: return android.view.KeyEvent.KEYCODE_DPAD_LEFT;
+            case 7: return android.view.KeyEvent.KEYCODE_DPAD_RIGHT;
+            case 8: return android.view.KeyEvent.KEYCODE_DPAD_CENTER;
+            case 9: return android.view.KeyEvent.KEYCODE_BACK;
+            case 10: return android.view.KeyEvent.KEYCODE_HOME;
+            case 11: return android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+            case 0: return android.view.KeyEvent.KEYCODE_MEDIA_REWIND;
+            case 1: return android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD;
+            case 2: return android.view.KeyEvent.KEYCODE_MEDIA_NEXT;
+            case 3: return android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS;
+            case 15: return android.view.KeyEvent.KEYCODE_INFO;
+            default: return 0;
+        }
+    }
+
     synchronized void stop() {
         try { if (advertiser != null) advertiser.stop(); } catch (Throwable ignored) { }
         try { if (server != null) server.stop(); } catch (Throwable ignored) { }
