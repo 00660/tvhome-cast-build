@@ -131,4 +131,6 @@
     <string name="homekit_pin_line">HomeKit 配对码：%1$s（家庭 App 添加配件时输入）</string>
     <string name="homekit_remote_channel">遥控通道</string>
     <string name="boot_start">开机自启</string>
+    <string name="dlna_switch">DLNA 投屏</string>
+    <string name="airplay_rotate">AirPlay 竖屏旋转 90°</string>
 </resources>
